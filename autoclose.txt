@@ -1,0 +1,201 @@
+*AutoClose.txt* Documentation for script AutoClose.vim
+>
+    Script : AutoClose.vim
+    Author : Thiago Alves
+    Email  : <thiago.salves@gmail.com>
+    Changed: 06/30/2008
+
+================================================================================
+                                                                      *ac_intro*
+1. Overview~
+
+    This plugin was born as a personal need to have some little special features
+from other editors into my  preferred  one.   The  Eclipse  IDE  editor  has  an
+auto-complete for open-close pair of characters feature  that  I  always  wanted
+into Vim.
+
+    As soon as you type a character  that  could  have  a  close  pair,  Eclipse
+automatically puts its pair in front of your cursor,  and  if  you  continue  to
+type and type the close character, Eclipse is smart  enough  to  not  insert  it
+again (it just move your cursor one character forward).
+
+    But the Eclipse editor don't stop there.  If you type an "open" character on 
+any part of your code that should not have a pair completion, it will not insert
+the close character for you.
+
+    The AutoClose plugin is an attempt to reproduce this behavior on
+Vim.
+
+    This document will guide you through the features that  I  put  inside  this
+plugin as well to options that you can use to personalize  it  as  long  as  you
+want.
+
+    The following is covered in this document:
+
+    1. Overview                                |ac_intro|
+    2. Under the hood                          |ac_details|
+       2.1 Autocommands                        |ac_autocommands|
+       2.2 Mappings                            |ac_mappings|
+    3. Configuring                             |ac_config|
+       3.1 Definning characters to auto close  |ac_charstoclose|
+       3.2 Definning protected regions         |ac_protectedregions|
+    4. Knowing probles                         |ac_problems|
+
+================================================================================
+                                                                    *ac_details*
+2. Under the hood~
+
+    This section will describe what is involved on AutoComplete plugin to make 
+it work, which mappings and autocommands.
+
+    The intent of this section is to let users know what this  plugin  is  doing
+in case of any strange behavior on your system.
+
+                                                               *ac_autocommands*
+2.1 Autocommands~
+
+    There are two autocommands created by AutoClose one used to clean every 
+plugin variable when you enter into insert mode and other one to help plugin 
+decide if a close character typed by you could be the one inserted automatically
+by plugin or not.
+
+    The two events used by AutoClose are:
+
+    1. CursorMovedI
+    2. InsertEnter
+
+    The InsertEnter event just clean some  plugin variables to make sure that an 
+auto closable char is recognized only if user type it in the same sentence.
+
+    Now the CursorMovedI event is the core of AutoClose. On this event the 
+plugin check if a character was entered and if this typed character was entered 
+between the completed characters. These informations are used by mapped 
+functions called by the stroke of the auto-complete keys to decide if a 
+character will be automatically inserted or skipped.
+
+                                                                   *ac_mappings*
+2.2 Mappings~
+
+    Every character that is defined to has a close pair is mapped to one of
+three possible functions:
+
+    1. OpenChar
+    2. CloseChar
+    3. CheckChar
+
+    The first two functions are meant to characters that it pair is different
+from it self like ( and ). Their behavior depending on which character is typed,
+open or close one. If the open character is typed than the OpenChar function
+check if there is a possibility to automatically insert the close pair (e.g. the
+cursor is not inside some area that is not allow to have auto completion) and if
+a close character is typed than CloseChar just check if the next character is
+the close one and if it can be skipped.
+
+    CheckChar is a little bit trickier. It is used to characters that has 
+itself as the closing pair (e.g the " character). Its behavior will be the sum
+of OpenChar and CloseChar functions plus the verification of the existance of
+an already typed char.
+    
+
+================================================================================
+                                                                     *ac_config*
+3. Configuring~
+
+    Its possible to personalize AutoClose plugin in two ways:
+
+    1. Setting which character will have which pair to close
+    2. Definning regions where the auto close will not happen
+
+    Both settings are made by definning a special variable to each case.
+
+                                              *ac_charstoclose* *acCharsToClose*
+3.1 Definning characters to auto close
+
+    If you are not sattisfied with the default characters to close you can 
+define your own by setting the global variable g:acCharsToClose.
+
+    The only thing to be careful is that this variable must be a dictionary on
+the following format:
+>
+    {"<open_char>": "<close_char>"}
+<
+    Otherwise the plugin will not recognize the settings and will use the 
+default values.
+
+    Following is the default declaration for auto close chars. If this 
+configuration is enought, you don't need to configure nothing:
+>
+    let g:acCharsToClose = {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'"}
+<
+
+                                      *ac_protectedregions* *acProtectedRegions*
+3.2 Definning protected regions
+
+    Inside some special regions the auto close feature is far from util, 
+actually we can say that on those regions, this feature is worst than no feature
+at all. This is the case for "Comments" and "Strings".
+
+    If you edit files with this characteristic and there is more than comments
+and strings where you would like to protect from auto close, just define the 
+global variable g:acProtectedRegions.
+
+    This variable must be a list of strings or the plugin will not recognize it
+and will use the defaults parameters. The format of this variable should be:
+>
+    ["<protected_region1>", "<protected_region2>", ...]
+<
+    Following is the default declaration to the protected regions. If you are
+satisfied with this, you don't have to set this setting:
+>
+    let g:acProtectedRegions = ["Comment", "String", "Character"]
+<
+
+================================================================================
+                                                                   *ac_problems*
+4. Knowing problems~
+
+    The reinsertion of the text with the  "."  character in normal mode is not 
+working properly. Now, after an auto completion, if you go to normal mode and 
+try to reinsert your previously entered text, only what was inserted between the
+auto completed characters is reinserted.  See an example (note that a | is  used
+to represent cursor position here):
+
+    1. Go to insert mode and type: (123
+>
+    1 (123|)
+    2
+    3
+    4
+    ~
+<
+    2. Go to normal mode
+    3. Move the cursor to somewhere else
+>
+    1 (123)
+    2
+    3 |
+    4
+    ~
+<
+    4. Press "." key and you'll have:
+>
+    1 (123)
+    2
+    3 123
+    4
+    ~
+<
+    I'm still not sure if there is a solution to this problem because this is  a
+normal behavior of Vim that usually cache what you are entering in  insert  mode
+until a movement key  (\<Left>,  \<Right>,  \<Up>,  \<Down>  and  possibly  some
+others) is pressed and you start to type again.
+
+    Other knowing problem is regarding the protected regions. if your the 
+character used to "enter" on a protected region is a character defined to be 
+auto closed, it will be!
+
+    An example is the comment region on Vim syntax. After insert the " 
+character, the plugin will insert another " to match the open char, even if
+this char is the first one on a sentense.
+
+    Questions or sugestions, please send me an email.
