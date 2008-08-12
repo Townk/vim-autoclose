@@ -1,11 +1,11 @@
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " AutoClose.vim - Automatically close pair of characters: ( with ), [ with ], { with }, etc.
-" Version: 1.0
+" Version: 1.1
 " Author: Thiago Alves <thiago.salves@gmail.com>
 " Maintainer: Thiago Alves <thiago.salves@gmail.com>
 " URL: http://thiagoalves.org
 " Licence: This script is released under the Vim License.
-" Last modified: 06/30/2008 
+" Last modified: 08/11/2008 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 let s:debug = 0
@@ -22,95 +22,66 @@ set cpo&vim             " go into nocompatible-mode
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Functions
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-function! s:CursorMoved()
-    autocmd! AutoClose CursorMovedI
-    let s:last_line = s:actual_line
-    let s:last_linenr = s:actual_linenr
-    let s:last_col = s:actual_col
-    call s:InsertEnter()
-
-    if s:last_linenr == s:actual_linenr && s:last_line != s:actual_line
-        let l:last_removed = []
-        if len(s:toCompleteStack) > 0 
-            if s:toCompleteStack[0][1] != s:actual_linenr
-                let s:toCompleteStack = []
-            else
-                while len(s:toCompleteStack) > 0 && (s:actual_col-1 < s:toCompleteStack[-1][2] || s:toCompleteStack[-1][3] < s:actual_col-1)
-                    let l:last_removed = remove(s:toCompleteStack, -1)
-                endwhile
-            endif
-        endif
-
-        if strlen(s:last_line) < strlen(s:actual_line)
-            let l:inserted = strpart(s:actual_line, col('.')-2, 1)
-            let l:pos_inserted = strpart(s:actual_line, col('.')-1, 1)
-            if has_key(s:charsToClose, l:inserted) && s:charsToClose[l:inserted] == l:pos_inserted
-                for i in range(len(s:toCompleteStack))
-                    let s:toCompleteStack[i][3] += 2
-                endfor
-                call add(s:toCompleteStack, [l:pos_inserted, s:actual_linenr, s:actual_col-1, s:actual_col])
-            else
-                for i in range(len(s:toCompleteStack))
-                    let s:toCompleteStack[i][3] += 1
-                endfor
-            endif
-        else
-            let l:removed = strpart(s:last_line, col('.')-1, 1)
-            let l:nextchar = strpart(s:actual_line, col('.')-1, 1)
-            for i in range(len(s:toCompleteStack))
-                let s:toCompleteStack[i][3] -= 1
-            endfor
-            if has_key(s:charsToClose, l:removed) && s:charsToClose[l:removed] == l:nextchar && 
-               \len(l:last_removed) > 0 && l:last_removed[0] == l:nextchar
-                call feedkeys("\<C-O>x")
-            endif
-        endif
+function! s:GetNextChar()
+    if col('$') == col('.')
+        return "\0"
     endif
-    autocmd AutoClose CursorMovedI * :call <SID>CursorMoved()
+    return strpart(getline('.'), col('.')-1, 1)
 endfunction
 
-function! s:InsertEnter()
-    let s:actual_linenr = line('.')
-    let s:actual_line = getline(s:actual_linenr)
-    let s:actual_col = col('.')
+function! s:GetPrevChar()
+    if col('.') == 1
+        return "\0"
+    endif
+    return strpart(getline('.'), col('.')-2, 1)
 endfunction
 
-function! s:OpenChar(char) 
-    let l:result = a:char
+function! s:IsEmptyPair()
+    let l:prev = s:GetPrevChar()
+    let l:next = s:GetNextChar()
+    if l:prev == "\0" || l:next == "\0"
+        return 0
+    endif
+    return get(s:charsToClose, l:prev, "\0") == l:next
+endfunction
+
+function! s:GetCurrentSyntaxRegionIf(char)
+    let l:origin_line = getline('.')
+    let l:changed_line = strpart(l:origin_line, 0, col('.')-1) . a:char . strpart(l:origin_line, col('.')-1)
+    call setline('.', l:changed_line)
     let l:region = synIDattr(synIDtrans(synID(line('.'), col('.'), 1)), 'name')
-    let l:nextchar = strpart(s:actual_line, col('.')-1, 1)
-    if l:nextchar !~ '\w' && index(s:protectedRegions, l:region) == -1
+    call setline('.', l:origin_line)
+    return l:region
+endfunction
+
+function! s:IsForbidden(char)
+    return index(s:protectedRegions, s:GetCurrentSyntaxRegionIf(a:char)) >= 0
+endfunction
+
+function! s:InsertPair(char)
+    let l:next = s:GetNextChar()
+    let l:result = a:char
+    if s:running && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w')
         let l:result .= s:charsToClose[a:char] . "\<Left>"
     endif
     return l:result
 endfunction
 
-function! s:CloseChar(char)
-    let l:result = a:char
-    let l:nextchar = strpart(s:actual_line, col('.')-1, 1)
-    if len(s:toCompleteStack) > 0 && s:toCompleteStack[0][2] <= s:actual_col && s:actual_col <= s:toCompleteStack[0][3]
-        let l:doit = 1
-    else
-        let l:doit = 0
-    endif
-    
-    if l:nextchar == a:char && l:doit
-        while len(s:toCompleteStack) > 0 && (col('.') < s:toCompleteStack[-1][2] || s:toCompleteStack[-1][3] < col('.')+1)
-            call remove(s:toCompleteStack, -1)
-        endwhile
+function! s:ClosePair(char)
+    if s:running && s:GetNextChar() == a:char
         let l:result = "\<Right>"
+    else
+        let l:result = a:char
     endif
     return l:result
 endfunction
 
-function! s:CheckChar(char)
-    let l:result = a:char
+function! s:CheckPair(char)
     let l:occur = 0
     let l:lastpos = 0
-    let l:nextchar = strpart(s:actual_line, col('.')-1, 1)
 
     while l:lastpos > -1
-        let l:lastpos = stridx(s:actual_line, a:char, l:lastpos+1)
+        let l:lastpos = stridx(getline('.'), a:char, l:lastpos+1)
         if l:lastpos > col('.')-2
             break
         endif
@@ -121,81 +92,74 @@ function! s:CheckChar(char)
 
     if l:occur == 0 || l:occur%2 == 0
         " Opening char
-        let l:region = synIDattr(synIDtrans(synID(line('.'), col('.'), 1)), 'name')
-        if l:nextchar !~ '\w' && index(s:protectedRegions, l:region) == -1
-            let l:result .= s:charsToClose[a:char] . "\<Left>"
-        endif
+        return s:InsertPair(a:char)
     else
         " Closing char
-        if len(s:toCompleteStack) > 0 && s:toCompleteStack[0][2] <= s:actual_col && s:actual_col <= s:toCompleteStack[0][3]
-            let l:doit = 1
-        else
-            let l:doit = 0
-        endif
-
-        if l:nextchar == a:char && l:doit
-            while len(s:toCompleteStack) > 0 && (col('.') < s:toCompleteStack[-1][2] || s:toCompleteStack[-1][3] < col('.')+1)
-                call remove(s:toCompleteStack, -1)
-            endwhile
-            let l:result = "\<Right>"
-        endif
+        return s:ClosePair(a:char)
     endif
-    return l:result
+endfunction
+
+function! s:Backspace()
+    if s:running && s:IsEmptyPair()
+        return "\<BS>\<Del>"
+    endif    
+    return "\<BS>"
 endfunction
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Configuration
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" Control variables to know where some character was inserted or deleted
-let s:last_line = ''
-let s:actual_line = ''
-let s:last_linenr = 0
-let s:actual_linenr = 0
-let s:last_col = 0
-let s:actual_col = 0
-
-" stack of characters autocompleted
-let s:toCompleteStack = []
-
-" Movement events
-augroup AutoClose
-    autocmd CursorMovedI * :call <SID>CursorMoved()
-    autocmd InsertEnter * :call <SID>InsertEnter()
-augroup END
-
+" variables that represents the turn on and turn off of virtualedition
+let s:turn_ve_on= "<C-O>:let save_ve = &ve<CR><C-O>:set ve=all<CR>"
+let s:turn_ve_off = "<C-O>:let &ve = save_ve<CR>"
+ 
 " let user define which character he/she wants to autocomplete
-if exists("g:acCharsToClose") && type(g:acCharsToClose) == type({})
-    let s:charsToClose = g:acCharsToClose
-    unlet g:acCharsToClose
+if exists("g:AutoClosePairs") && type(g:AutoClosePairs) == type({})
+    let s:charsToClose = g:AutoClosePairs
+    unlet g:AutoClosePairs
 else
     let s:charsToClose = {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'"}
 endif
 
 " let user define in which regions the autocomplete feature should not occur
-if exists("g:acProtectedRegions") && type(g:acProtectedRegions) == type([])
-    let s:protectedRegions = g:acProtectedRegions
-    unlet g:acProtectedRegions
+if exists("g:AutoCloseProtectedRegions") && type(g:AutoCloseProtectedRegions) == type([])
+    let s:protectedRegions = g:AutoCloseProtectedRegions
+    unlet g:AutoCloseProtectedRegions
 else
     let s:protectedRegions = ["Comment", "String", "Character"]
 endif
 
+" let user define if he/she wants the plugin turned on when vim start. Defaul is YES
+if exists("g:AutoCloseOn") && type(g:AutoCloseOn) == type(0)
+    let s:running = g:AutoCloseOn
+    unlet g:AutoCloseOn
+else
+    let s:running = 1
+endif
+
 " create appropriate maps to defined open/close characters
 for key in keys(s:charsToClose)
-    if key == s:charsToClose[key]
-        if key == "'"
-            execute "inoremap <silent> " . key . " <C-R>=<SID>CheckChar(\"'\")<CR>"
-        else
-            execute "inoremap <silent> " . key . " <C-R>=<SID>CheckChar('" . key . "')<CR>"
-        endif
+    if key == '"'
+        let open_func_arg = '"\""'
+        let close_func_arg = '"\""'
     else
-        execute "inoremap <silent> " . key . " <C-R>=<SID>OpenChar('" . key . "')<CR>"
-        execute "inoremap <silent> " . s:charsToClose[key] . " <C-R>=<SID>CloseChar('" . s:charsToClose[key] . "')<CR>"
+        let open_func_arg = '"' . key . '"'
+        let close_func_arg = '"' . s:charsToClose[key] . '"'
+    endif 
+    if key == s:charsToClose[key]
+        exec "inoremap <silent> " . key . " " . s:turn_ve_on . "<C-R>=<SID>CheckPair(" . open_func_arg . ")<CR>" . s:turn_ve_off
+    else
+        exec "inoremap <silent> " . s:charsToClose[key] . " " . s:turn_ve_on . "<C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>" . s:turn_ve_off
+        exec "inoremap <silent> " . key . " " . s:turn_ve_on . "<C-R>=<SID>InsertPair(" . open_func_arg . ")<CR>" . s:turn_ve_off
     endif
 endfor
+exec "inoremap <silent> <BS> " . s:turn_ve_on . "<C-R>=<SID>Backspace()<CR>" . s:turn_ve_off
 
-" return to the users own compatible-mode settings
-let &cpo = s:global_cpo
+" Define convenient commands
+command! AutoCloseOn :let s:running = 1
+command! AutoCloseOff :let s:running = 0
+command! AutoCloseToggle :let s:running = !s:running
 
-" clean up
-unlet key
-unlet s:global_cpo
+" Clean up
+unlet s:turn_ve_on
+unlet s:turn_ve_off
