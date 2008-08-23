@@ -106,6 +106,15 @@ function! s:Backspace()
     return "\<BS>"
 endfunction
 
+function! s:ToggleAutoClose()
+    let s:running = !s:running
+    if s:running
+        echo "AutoClose ON"
+    else
+        echo "AutoClose OFF"
+    endif
+endfunction
+
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Configuration
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -158,7 +167,7 @@ exec "inoremap <silent> <BS> " . s:turn_ve_on . "<C-R>=<SID>Backspace()<CR>" . s
 " Define convenient commands
 command! AutoCloseOn :let s:running = 1
 command! AutoCloseOff :let s:running = 0
-command! AutoCloseToggle :let s:running = !s:running
+command! AutoCloseToggle :call s:ToggleAutoClose()
 
 " Clean up
 unlet s:turn_ve_on
