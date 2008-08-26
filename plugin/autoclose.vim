@@ -8,7 +8,7 @@
 " Last modified: 08/11/2008 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-let s:debug = 0
+let s:debug = 1
 
 " check if script is already loaded
 if s:debug == 0 && exists("g:loaded_AutoClose")
@@ -92,7 +92,7 @@ function! s:CheckPair(char)
 
     while l:lastpos > -1
         let l:lastpos = stridx(getline('.'), a:char, l:lastpos+1)
-        if l:lastpos > col('.')-2
+        if (col('.') > 2 && l:lastpos > col('.')-2) || l:lastpos > col('.')-1
             break
         endif
         if l:lastpos >= 0
