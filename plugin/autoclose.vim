@@ -1,11 +1,11 @@
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " AutoClose.vim - Automatically close pair of characters: ( with ), [ with ], { with }, etc.
-" Version: 1.1
+" Version: 1.3
 " Author: Thiago Alves <thiago.salves@gmail.com>
 " Maintainer: Thiago Alves <thiago.salves@gmail.com>
 " URL: http://thiagoalves.org
 " Licence: This script is released under the Vim License.
-" Last modified: 08/25/2008 
+" Last modified: 08/26/2008 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 let s:debug = 0
@@ -179,6 +179,10 @@ command! AutoCloseOn :let s:running = 1
 command! AutoCloseOff :let s:running = 0
 command! AutoCloseToggle :call s:ToggleAutoClose()
 
+" return to the users own compatible-mode settings
+let &cpo = s:global_cpo
+
 " Clean up
+unlet s:global_cpo
 unlet s:turn_ve_on
 unlet s:turn_ve_off
