@@ -1,11 +1,11 @@
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " AutoClose.vim - Automatically close pair of characters: ( with ), [ with ], { with }, etc.
-" Version: 1.3
+" Version: 1.4
 " Author: Thiago Alves <thiago.salves@gmail.com>
 " Maintainer: Thiago Alves <thiago.salves@gmail.com>
 " URL: http://thiagoalves.org
 " Licence: This script is released under the Vim License.
-" Last modified: 08/26/2008 
+" Last modified: 09/05/2008 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 let s:debug = 0
@@ -69,20 +69,30 @@ function! s:IsForbidden(char)
 endfunction
 
 function! s:InsertPair(char)
+    let l:save_ve = &ve
+    set ve=all
+
     let l:next = s:GetNextChar()
     let l:result = a:char
     if s:running && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w')
         let l:result .= s:charsToClose[a:char] . "\<Left>"
     endif
+
+    exec "set ve=" . l:save_ve
     return l:result
 endfunction
 
 function! s:ClosePair(char)
+    let l:save_ve = &ve
+    set ve=all
+
     if s:running && s:GetNextChar() == a:char
         let l:result = "\<Right>"
     else
         let l:result = a:char
     endif
+
+    exec "set ve=" . l:save_ve
     return l:result
 endfunction
 
@@ -110,10 +120,16 @@ function! s:CheckPair(char)
 endfunction
 
 function! s:Backspace()
+    let l:save_ve = &ve
+    set ve=all
+
+    let l:result = "\<BS>"
     if s:running && s:IsEmptyPair()
-        return "\<BS>\<Del>"
+        let l:result .= "\<Del>"
     endif    
-    return "\<BS>"
+
+    exec "set ve=" . l:save_ve
+    return l:result
 endfunction
 
 function! s:ToggleAutoClose()
@@ -128,10 +144,6 @@ endfunction
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Configuration
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" variables that represents the turn on and turn off of virtualedition
-let s:turn_ve_on= "<C-O>:let save_ve = &ve<CR><C-O>:set ve=all<CR>"
-let s:turn_ve_off = "<C-O>:let &ve = save_ve<CR>"
- 
 " let user define which character he/she wants to autocomplete
 if exists("g:AutoClosePairs") && type(g:AutoClosePairs) == type({})
     let s:charsToClose = g:AutoClosePairs
@@ -158,31 +170,16 @@ endif
 
 " create appropriate maps to defined open/close characters
 for key in keys(s:charsToClose)
-    if key == '"'
-        let open_func_arg = '"\""'
-        let close_func_arg = '"\""'
-    else
-        let open_func_arg = '"' . key . '"'
-        let close_func_arg = '"' . s:charsToClose[key] . '"'
-    endif 
     if key == s:charsToClose[key]
-        exec "inoremap <silent> " . key . " " . s:turn_ve_on . "<C-R>=<SID>CheckPair(" . open_func_arg . ")<CR>" . s:turn_ve_off
+        exec "inoremap <silent> " . key . " <C-R>=<SID>CheckPair(\"" . (key == '"' ? '\"' : key) . "\")<CR>"
     else
-        exec "inoremap <silent> " . s:charsToClose[key] . " " . s:turn_ve_on . "<C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>" . s:turn_ve_off
-        exec "inoremap <silent> " . key . " " . s:turn_ve_on . "<C-R>=<SID>InsertPair(" . open_func_arg . ")<CR>" . s:turn_ve_off
+        exec "inoremap <silent> " . key . " <C-R>=<SID>InsertPair(\"" . key . "\")<CR>"
+        exec "inoremap <silent> " . s:charsToClose[key] . " <C-R>=<SID>ClosePair(\"" . s:charsToClose[key] . "\")<CR>"
     endif
 endfor
-exec "inoremap <silent> <BS> " . s:turn_ve_on . "<C-R>=<SID>Backspace()<CR>" . s:turn_ve_off
+exec "inoremap <silent> <BS> <C-R>=<SID>Backspace()<CR>"
 
 " Define convenient commands
 command! AutoCloseOn :let s:running = 1
 command! AutoCloseOff :let s:running = 0
 command! AutoCloseToggle :call s:ToggleAutoClose()
-
-" return to the users own compatible-mode settings
-let &cpo = s:global_cpo
-
-" Clean up
-unlet s:global_cpo
-unlet s:turn_ve_on
-unlet s:turn_ve_off
