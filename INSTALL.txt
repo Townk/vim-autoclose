@@ -1,0 +1,12 @@
+===========
+INSTALL.txt
+===========
+
+Put the script into your $VIM/plugin directory and the documentation 
+into $VIM/doc and type on your vim:
+
+   :helptags $VIM/doc
+
+You can change $VIM to whatever place your vim can automatically read 
+plugins and documentations like in your home vim directory. 
+

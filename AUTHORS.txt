@@ -1,0 +1,4 @@
+The primary author of vim-autoclose is Thiago dos Santos Alves
+<thiago.salves@gmail.com>, who may be found online at
+<http://thiagoalves.org>.
+
