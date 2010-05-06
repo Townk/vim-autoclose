@@ -1,6 +1,6 @@
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " AutoClose.vim - Automatically close pair of characters: ( with ), [ with ], { with }, etc.
-" Version: 1.4
+" Version: 1.4.1
 " Author: Thiago Alves <thiago.salves@gmail.com>
 " Maintainer: Thiago Alves <thiago.salves@gmail.com>
 " URL: http://thiagoalves.org
@@ -144,6 +144,10 @@ endfunction
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Configuration
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" here is a dictionary of characters that need to be converted before being used as map
+let s:mapRemap = {'|': '<Bar>'}
+let s:argRemap = {'"': '\"'}
+
 " let user define which character he/she wants to autocomplete
 if exists("g:AutoClosePairs") && type(g:AutoClosePairs) == type({})
     let s:charsToClose = g:AutoClosePairs
@@ -170,11 +174,17 @@ endif
 
 " create appropriate maps to defined open/close characters
 for key in keys(s:charsToClose)
+    let map_open = ( has_key(s:mapRemap, key) ? s:mapRemap[key] : key )
+    let map_close = ( has_key(s:mapRemap, s:charsToClose[key]) ? s:mapRemap[s:charsToClose[key]] : s:charsToClose[key] )
+
+    let open_func_arg = ( has_key(s:argRemap, map_open) ? '"' . s:argRemap[map_open] . '"' : '"' . map_open . '"' )
+    let close_func_arg = ( has_key(s:argRemap, map_close) ? '"' . s:argRemap[map_close] . '"' : '"' . map_close . '"' )
+
     if key == s:charsToClose[key]
-        exec "inoremap <silent> " . key . " <C-R>=<SID>CheckPair(\"" . (key == '"' ? '\"' : key) . "\")<CR>"
+        exec "inoremap <silent> " . map_open . " <C-R>=<SID>CheckPair(" . open_func_arg . ")<CR>"
     else
-        exec "inoremap <silent> " . key . " <C-R>=<SID>InsertPair(\"" . key . "\")<CR>"
-        exec "inoremap <silent> " . s:charsToClose[key] . " <C-R>=<SID>ClosePair(\"" . s:charsToClose[key] . "\")<CR>"
+        exec "inoremap <silent> " . map_open . " <C-R>=<SID>InsertPair(" . open_func_arg . ")<CR>"
+        exec "inoremap <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
     endif
 endfor
 exec "inoremap <silent> <BS> <C-R>=<SID>Backspace()<CR>"
