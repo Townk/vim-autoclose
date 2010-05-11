@@ -75,11 +75,10 @@ function! s:PushBuffer(char)
     call insert(b:AutoCloseBuffer, a:char)
 endfunction
 
-function! s:PopBuffer(num)
+function! s:PopBuffer()
     if exists("b:AutoCloseBuffer") && len(b:AutoCloseBuffer) > 0
-	   call remove(b:AutoCloseBuffer, 0, (a:num-1))
+	   call remove(b:AutoCloseBuffer, 0)
 	endif
-	return ''
 endfunction
 
 function! s:FlushBuffer()
@@ -87,15 +86,12 @@ function! s:FlushBuffer()
     if exists("b:AutoCloseBuffer")
         let l:len = len(b:AutoCloseBuffer)
         if l:len > 0
-            let l:bufferStr = join(b:AutoCloseBuffer, '')
+            let l:result = join(b:AutoCloseBuffer, '') . repeat("\<Left>", l:len - 1)
+            let b:AutoCloseBuffer = []
+
             let l:line = getline('.')
             let l:column = col('.') -2
-            let l:lefts = repeat("\<Left>", l:len - 1)
-
             call setline('.', l:line[:l:column] . l:line[l:column + l:len + 1:])
-
-            let l:result = substitute(l:bufferStr, 's', "\<Space>", 'g') . l:lefts
-            let b:AutoCloseBuffer = []
         endif
     endif
 	return l:result
@@ -137,7 +133,7 @@ function! s:ClosePair(char)
         else
             call setline('.', l:line[:l:column] . l:line[l:column+2:])
         endif
-        call s:PopBuffer(1)
+        call s:PopBuffer()
     endif
 
     exec "set ve=" . l:save_ve
@@ -180,7 +176,7 @@ function! s:Backspace()
         else
             call setline('.', l:line[:l:column] . l:line[l:column+2:])
         endif
-        call s:PopBuffer(1)
+        call s:PopBuffer()
     endif    
 
     exec "set ve=" . l:save_ve
