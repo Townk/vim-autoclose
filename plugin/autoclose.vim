@@ -42,7 +42,7 @@ function! s:IsEmptyPair()
     if l:prev == "\0" || l:next == "\0"
         return 0
     endif
-    return get(b:AutoClosePairs, l:prev, "\0") == l:next
+    return (l:prev == l:next && index(b:AutoCloseExpandChars, has_key(s:mapRemap, l:prev) ? s:mapRemap[l:prev] : l:prev) >= 0) || (get(b:AutoClosePairs, l:prev, "\0") == l:next)
 endfunction
 
 function! s:GetCurrentSyntaxRegion()
@@ -168,6 +168,44 @@ function! s:CheckPair(char)
     endif
 endfunction
 
+function! s:ExpandChar(char)
+    let l:save_ve = &ve
+    set ve=all
+
+    if b:AutoCloseOn && s:IsEmptyPair()
+        call s:InsertCharsOnLine(a:char)
+        call s:PushBuffer(a:char)
+    endif
+
+    exec "set ve=" . l:save_ve
+    return a:char
+endfunction 
+
+function! s:ExpandEnter()
+    let l:save_ve = &ve
+    let l:result = "\<CR>"
+    set ve=all
+
+    if b:AutoCloseOn && s:IsEmptyPair()
+        let l:result = s:FlushBuffer() . "\<Left>\<CR>\<Esc>O"
+    endif
+
+    exec "set ve=" . l:save_ve
+    return l:result
+endfunction
+
+function! s:Delete()
+    let l:save_ve = &ve
+    set ve=all
+
+    if exists("b:AutoCloseBuffer") && len(b:AutoCloseBuffer) > 0 && b:AutoCloseBuffer[0] == s:GetNextChar()
+        call s:PopBuffer()
+    endif    
+
+    exec "set ve=" . l:save_ve
+    return "\<Del>"
+endfunction
+
 function! s:Backspace()
     let l:save_ve = &ve
     set ve=all
@@ -212,6 +250,15 @@ function! s:DefineVariables()
         endif
     endif
 
+    " let user define which characters should be used as expanded characters inside empty pairs
+    if !exists("b:AutoCloseExpandChars") || type(b:AutoCloseExpandChars) != type([])
+        if exists("g:AutoCloseExpandChars") && type(g:AutoCloseExpandChars) == type([])
+            let b:AutoCloseExpandChars = g:AutoCloseExpandChars
+        else
+            let b:AutoCloseExpandChars = []
+        endif
+    endif
+
     " let user define if he/she wants the plugin turned on when vim start. Defaul is YES
     if !exists("b:AutoCloseOn") || type(b:AutoCloseOn) != type(0)
         if exists("g:AutoCloseOn") && type(g:AutoCloseOn) == type(0)
@@ -240,11 +287,21 @@ function! s:CreatePairsMaps()
             exec "inoremap <buffer> <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
         endif
     endfor
+
+    for key in b:AutoCloseExpandChars
+        if key == "<CR>" || key == "\<CR>" || key == ""
+            inoremap <buffer> <silent> <CR> <C-R>=<SID>ExpandEnter()<CR>
+        else
+            exec "inoremap <buffer> <silent> " . key . " <C-R>=<SID>ExpandChar(\"" . key . "\")<CR>"
+        endif
+    endfor
+    "inoremap <buffer> <silent> <Space> <C-R>=<SID>ExpandChar("\<Space>")<CR>
 endfunction
 
 function! s:CreateExtraMaps()
     " Extra mapping
     inoremap <buffer> <silent> <BS> <C-R>=<SID>Backspace()<CR>
+    inoremap <buffer> <silent> <Del> <C-R>=<SID>Delete()<CR>
 
     " Fix the re-do feature:
     inoremap <buffer> <silent> <Esc> <C-R>=<SID>FlushBuffer()<CR><Esc>
@@ -276,7 +333,7 @@ endfunction
 " Configuration
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " here is a dictionary of characters that need to be converted before being used as map
-let s:mapRemap = {'|': '<Bar>'}
+let s:mapRemap = {'|': '<Bar>', ' ': '<Space>'}
 let s:argRemap = {'"': '\"'}
 
 autocmd FileType * call <SID>CreateMaps()
