@@ -2,3 +2,5 @@ The primary author of vim-autoclose is Thiago dos Santos Alves
 <thiago.salves@gmail.com>, who may be found online at
 <http://thiagoalves.org>.
 
+Buffer idea to avoid undo break was gather from delimitMate
+plug-in created by Israel Chauca F. <israelchauca@gmail.com>.
