@@ -1,6 +1,6 @@
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " AutoClose.vim - Automatically close pair of characters: ( with ), [ with ], { with }, etc.
-" Version: 2.0.0
+" Version: 2.0
 " Author: Thiago Alves <thiago.salves@gmail.com>
 " Maintainer: Thiago Alves <thiago.salves@gmail.com>
 " URL: http://thiagoalves.org
