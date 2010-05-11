@@ -88,14 +88,33 @@ function! s:FlushBuffer()
         if l:len > 0
             let l:result = join(b:AutoCloseBuffer, '') . repeat("\<Left>", l:len - 1)
             let b:AutoCloseBuffer = []
-
-            let l:line = getline('.')
-            let l:column = col('.') -2
-            call setline('.', l:line[:l:column] . l:line[l:column + l:len + 1:])
+            call s:EraseCharsOnLine(l:len)
         endif
     endif
 	return l:result
 endfunction
+
+function! s:InsertCharsOnLine(str)
+    let l:line = getline('.')
+    let l:column = col('.')-2
+
+    if l:column < 0
+        call setline('.', a:str . l:line)
+    else
+        call setline('.', l:line[:l:column] . a:str . l:line[l:column+1:])
+    endif
+endfunction
+
+function! s:EraseCharsOnLine(len)
+    let l:line = getline('.')
+    let l:column = col('.')-2
+
+    if l:column < 0
+        call setline('.', l:line[a:len + 1:])
+    else
+        call setline('.', l:line[:l:column] . l:line[l:column + a:len + 1:])
+    endif
+endfunction 
 
 function! s:InsertPair(char)
     let l:save_ve = &ve
@@ -104,14 +123,7 @@ function! s:InsertPair(char)
     let l:next = s:GetNextChar()
     let l:result = a:char
     if b:AutoCloseOn && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w')
-        let l:line = getline('.')
-        let l:column = col('.')-2
-
-        if l:column < 0
-            call setline('.', b:AutoClosePairs[a:char] . l:line)
-        else
-            call setline('.', l:line[:l:column] . b:AutoClosePairs[a:char] . l:line[l:column+1:])
-        endif
+        call s:InsertCharsOnLine(b:AutoClosePairs[a:char])
         call s:PushBuffer(b:AutoClosePairs[a:char])
     endif
 
@@ -125,14 +137,7 @@ function! s:ClosePair(char)
 
     let l:result = a:char
     if b:AutoCloseOn && s:GetNextChar() == a:char
-        let l:line = getline('.')
-        let l:column = col('.')-2
-
-        if l:column < 0
-            call setline('.', l:line[:1])
-        else
-            call setline('.', l:line[:l:column] . l:line[l:column+2:])
-        endif
+        call s:EraseCharsOnLine(1)
         call s:PopBuffer()
     endif
 
@@ -168,14 +173,7 @@ function! s:Backspace()
     set ve=all
 
     if b:AutoCloseOn && s:IsEmptyPair()
-        let l:line = getline('.')
-        let l:column = col('.')-2
-
-        if l:column < 0
-            call setline('.', l:line[:1])
-        else
-            call setline('.', l:line[:l:column] . l:line[l:column+2:])
-        endif
+        call s:EraseCharsOnLine(1)
         call s:PopBuffer()
     endif    
 
