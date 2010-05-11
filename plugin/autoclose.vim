@@ -283,6 +283,8 @@ let s:argRemap = {'"': '\"'}
 
 autocmd FileType * call <SID>CreateMaps()
 autocmd BufNewFile,BufRead,BufEnter * if !<SID>IsLoadedOnBuffer() | call <SID>CreateMaps() | endif
+autocmd InsertEnter * call <SID>FlushBuffer()
+autocmd BufEnter * if mode() == 'i' | call <SID>FlushBuffer() | endif
 
 " Define convenient commands
 command! AutoCloseOn :let b:AutoCloseOn = 1
