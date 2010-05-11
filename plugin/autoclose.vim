@@ -1,11 +1,11 @@
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " AutoClose.vim - Automatically close pair of characters: ( with ), [ with ], { with }, etc.
-" Version: 1.4.1
+" Version: 2.0.0
 " Author: Thiago Alves <thiago.salves@gmail.com>
 " Maintainer: Thiago Alves <thiago.salves@gmail.com>
 " URL: http://thiagoalves.org
 " Licence: This script is released under the Vim License.
-" Last modified: 09/05/2008 
+" Last modified: 05/10/2010
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 let s:debug = 0
@@ -68,6 +68,39 @@ function! s:IsForbidden(char)
     return l:result && l:region == 'Comment'
 endfunction
 
+function! s:PushBuffer(char)
+    if !exists("b:AutoCloseBuffer")
+        let b:AutoCloseBuffer = []
+    endif
+    call insert(b:AutoCloseBuffer, a:char)
+endfunction
+
+function! s:PopBuffer(num)
+    if exists("b:AutoCloseBuffer") && len(b:AutoCloseBuffer) > 0
+	   call remove(b:AutoCloseBuffer, 0, (a:num-1))
+	endif
+	return ''
+endfunction
+
+function! s:FlushBuffer()
+    let l:result = ''
+    if exists("b:AutoCloseBuffer")
+        let l:len = len(b:AutoCloseBuffer)
+        if l:len > 0
+            let l:bufferStr = join(b:AutoCloseBuffer, '')
+            let l:line = getline('.')
+            let l:column = col('.') -2
+            let l:lefts = repeat("\<Left>", l:len - 1)
+
+            call setline('.', l:line[:l:column] . l:line[l:column + l:len + 1:])
+
+            let l:result = substitute(l:bufferStr, 's', "\<Space>", 'g') . l:lefts
+            let b:AutoCloseBuffer = []
+        endif
+    endif
+	return l:result
+endfunction
+
 function! s:InsertPair(char)
     let l:save_ve = &ve
     set ve=all
@@ -75,7 +108,15 @@ function! s:InsertPair(char)
     let l:next = s:GetNextChar()
     let l:result = a:char
     if s:running && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w')
-        let l:result .= s:charsToClose[a:char] . "\<Left>"
+        let l:line = getline('.')
+        let l:column = col('.')-2
+
+        if l:column < 0
+            call setline('.', s:charsToClose[a:char] . l:line)
+        else
+            call setline('.', l:line[:l:column] . s:charsToClose[a:char] . l:line[l:column+1:])
+        endif
+        call s:PushBuffer(s:charsToClose[a:char])
     endif
 
     exec "set ve=" . l:save_ve
@@ -86,10 +127,17 @@ function! s:ClosePair(char)
     let l:save_ve = &ve
     set ve=all
 
+    let l:result = a:char
     if s:running && s:GetNextChar() == a:char
-        let l:result = "\<Right>"
-    else
-        let l:result = a:char
+        let l:line = getline('.')
+        let l:column = col('.')-2
+
+        if l:column < 0
+            call setline('.', l:line[:1])
+        else
+            call setline('.', l:line[:l:column] . l:line[l:column+2:])
+        endif
+        call s:PopBuffer(1)
     endif
 
     exec "set ve=" . l:save_ve
@@ -123,13 +171,20 @@ function! s:Backspace()
     let l:save_ve = &ve
     set ve=all
 
-    let l:result = "\<BS>"
     if s:running && s:IsEmptyPair()
-        let l:result .= "\<Del>"
+        let l:line = getline('.')
+        let l:column = col('.')-2
+
+        if l:column < 0
+            call setline('.', l:line[:1])
+        else
+            call setline('.', l:line[:l:column] . l:line[l:column+2:])
+        endif
+        call s:PopBuffer(1)
     endif    
 
     exec "set ve=" . l:save_ve
-    return l:result
+    return "\<BS>"
 endfunction
 
 function! s:ToggleAutoClose()
@@ -188,6 +243,20 @@ for key in keys(s:charsToClose)
     endif
 endfor
 exec "inoremap <silent> <BS> <C-R>=<SID>Backspace()<CR>"
+
+" Extra mapping
+" Fix the re-do feature:
+inoremap <buffer> <Esc> <C-R>=<SID>FlushBuffer()<CR><Esc>
+
+" Flush the char buffer on mouse click:
+inoremap <buffer> <LeftMouse> <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
+inoremap <buffer> <RightMouse> <C-R>=<SID>FlushBuffer()<CR><RightMouse>
+
+" Flush the char buffer on key movements:
+inoremap <buffer> <Left> <C-R>=<SID>FlushBuffer()<CR><Left>
+inoremap <buffer> <Right> <C-R>=<SID>FlushBuffer()<CR><Right>
+inoremap <buffer> <Up> <C-R>=<SID>FlushBuffer()<CR><Up>
+inoremap <buffer> <Down> <C-R>=<SID>FlushBuffer()<CR><Down>
 
 " Define convenient commands
 command! AutoCloseOn :let s:running = 1
