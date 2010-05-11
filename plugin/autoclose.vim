@@ -228,8 +228,7 @@ function! s:DefineVariables()
     endif
 endfunction
 
-function! s:CreateMaps()
-    call s:DefineVariables()
+function! s:CreatePairsMaps()
     " create appropriate maps to defined open/close characters
     for key in keys(b:AutoClosePairs)
         let map_open = ( has_key(s:mapRemap, key) ? s:mapRemap[key] : key )
@@ -245,9 +244,12 @@ function! s:CreateMaps()
             exec "inoremap <buffer> <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
         endif
     endfor
+endfunction
+
+function! s:CreateExtraMaps()
+    " Extra mapping
     inoremap <buffer> <silent> <BS> <C-R>=<SID>Backspace()<CR>
 
-    " Extra mapping
     " Fix the re-do feature:
     inoremap <buffer> <silent> <Esc> <C-R>=<SID>FlushBuffer()<CR><Esc>
 
@@ -260,6 +262,12 @@ function! s:CreateMaps()
     inoremap <buffer> <silent> <Right> <C-R>=<SID>FlushBuffer()<CR><Right>
     inoremap <buffer> <silent> <Up> <C-R>=<SID>FlushBuffer()<CR><Up>
     inoremap <buffer> <silent> <Down> <C-R>=<SID>FlushBuffer()<CR><Down>
+endfunction
+
+function! s:CreateMaps()
+    call s:DefineVariables()
+    call s:CreatePairsMaps()
+    call s:CreateExtraMaps()
 
     let b:loaded_AutoClose = 1
 endfunction
