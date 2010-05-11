@@ -42,7 +42,7 @@ function! s:IsEmptyPair()
     if l:prev == "\0" || l:next == "\0"
         return 0
     endif
-    return get(s:charsToClose, l:prev, "\0") == l:next
+    return get(b:AutoClosePairs, l:prev, "\0") == l:next
 endfunction
 
 function! s:GetCurrentSyntaxRegion()
@@ -59,12 +59,12 @@ function! s:GetCurrentSyntaxRegionIf(char)
 endfunction
 
 function! s:IsForbidden(char)
-    let l:result = index(s:protectedRegions, s:GetCurrentSyntaxRegion()) >= 0
+    let l:result = index(b:AutoCloseProtectedRegions, s:GetCurrentSyntaxRegion()) >= 0
     if l:result
         return l:result
     endif
     let l:region = s:GetCurrentSyntaxRegionIf(a:char)
-    let l:result = index(s:protectedRegions, l:region) >= 0
+    let l:result = index(b:AutoCloseProtectedRegions, l:region) >= 0
     return l:result && l:region == 'Comment'
 endfunction
 
@@ -107,16 +107,16 @@ function! s:InsertPair(char)
 
     let l:next = s:GetNextChar()
     let l:result = a:char
-    if s:running && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w')
+    if b:AutoCloseOn && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w')
         let l:line = getline('.')
         let l:column = col('.')-2
 
         if l:column < 0
-            call setline('.', s:charsToClose[a:char] . l:line)
+            call setline('.', b:AutoClosePairs[a:char] . l:line)
         else
-            call setline('.', l:line[:l:column] . s:charsToClose[a:char] . l:line[l:column+1:])
+            call setline('.', l:line[:l:column] . b:AutoClosePairs[a:char] . l:line[l:column+1:])
         endif
-        call s:PushBuffer(s:charsToClose[a:char])
+        call s:PushBuffer(b:AutoClosePairs[a:char])
     endif
 
     exec "set ve=" . l:save_ve
@@ -128,7 +128,7 @@ function! s:ClosePair(char)
     set ve=all
 
     let l:result = a:char
-    if s:running && s:GetNextChar() == a:char
+    if b:AutoCloseOn && s:GetNextChar() == a:char
         let l:line = getline('.')
         let l:column = col('.')-2
 
@@ -171,7 +171,7 @@ function! s:Backspace()
     let l:save_ve = &ve
     set ve=all
 
-    if s:running && s:IsEmptyPair()
+    if b:AutoCloseOn && s:IsEmptyPair()
         let l:line = getline('.')
         let l:column = col('.')-2
 
@@ -188,12 +188,84 @@ function! s:Backspace()
 endfunction
 
 function! s:ToggleAutoClose()
-    let s:running = !s:running
-    if s:running
+    let b:AutoCloseOn = !b:AutoCloseOn
+    if b:AutoCloseOn
         echo "AutoClose ON"
     else
         echo "AutoClose OFF"
     endif
+endfunction
+
+function! s:DefineVariables()
+    " all the following variable can be set per buffer or global. If both are set
+    " the buffer variable has priority.
+
+    " let user define which character he/she wants to autocomplete
+    if !exists("b:AutoClosePairs") || type(b:AutoClosePairs) != type({})
+        if exists("g:AutoClosePairs") && type(g:AutoClosePairs) == type({})
+            let b:AutoClosePairs = g:AutoClosePairs
+        else
+            let b:AutoClosePairs = {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'"}
+        endif
+    endif
+
+    " let user define in which regions the autocomplete feature should not occur
+    if !exists("b:AutoCloseProtectedRegions") || type(b:AutoCloseProtectedRegions) != type([])
+        if exists("g:AutoCloseProtectedRegions") && type(g:AutoCloseProtectedRegions) == type([])
+            let b:AutoCloseProtectedRegions = g:AutoCloseProtectedRegions
+        else
+            let b:AutoCloseProtectedRegions = ["Comment", "String", "Character"]
+        endif
+    endif
+
+    " let user define if he/she wants the plugin turned on when vim start. Defaul is YES
+    if !exists("b:AutoCloseOn") || type(b:AutoCloseOn) != type(0)
+        if exists("g:AutoCloseOn") && type(g:AutoCloseOn) == type(0)
+            let b:AutoCloseOn = g:AutoCloseOn
+        else
+            let b:AutoCloseOn = 1
+        endif
+    endif
+endfunction
+
+function! s:CreateMaps()
+    call s:DefineVariables()
+    " create appropriate maps to defined open/close characters
+    for key in keys(b:AutoClosePairs)
+        let map_open = ( has_key(s:mapRemap, key) ? s:mapRemap[key] : key )
+        let map_close = ( has_key(s:mapRemap, b:AutoClosePairs[key]) ? s:mapRemap[b:AutoClosePairs[key]] : b:AutoClosePairs[key] )
+
+        let open_func_arg = ( has_key(s:argRemap, map_open) ? '"' . s:argRemap[map_open] . '"' : '"' . map_open . '"' )
+        let close_func_arg = ( has_key(s:argRemap, map_close) ? '"' . s:argRemap[map_close] . '"' : '"' . map_close . '"' )
+
+        if key == b:AutoClosePairs[key]
+            exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>CheckPair(" . open_func_arg . ")<CR>"
+        else
+            exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>InsertPair(" . open_func_arg . ")<CR>"
+            exec "inoremap <buffer> <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
+        endif
+    endfor
+    inoremap <buffer> <silent> <BS> <C-R>=<SID>Backspace()<CR>
+
+    " Extra mapping
+    " Fix the re-do feature:
+    inoremap <buffer> <silent> <Esc> <C-R>=<SID>FlushBuffer()<CR><Esc>
+
+    " Flush the char buffer on mouse click:
+    inoremap <buffer> <silent> <LeftMouse> <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
+    inoremap <buffer> <silent> <RightMouse> <C-R>=<SID>FlushBuffer()<CR><RightMouse>
+
+    " Flush the char buffer on key movements:
+    inoremap <buffer> <silent> <Left> <C-R>=<SID>FlushBuffer()<CR><Left>
+    inoremap <buffer> <silent> <Right> <C-R>=<SID>FlushBuffer()<CR><Right>
+    inoremap <buffer> <silent> <Up> <C-R>=<SID>FlushBuffer()<CR><Up>
+    inoremap <buffer> <silent> <Down> <C-R>=<SID>FlushBuffer()<CR><Down>
+
+    let b:loaded_AutoClose = 1
+endfunction
+
+function! s:IsLoadedOnBuffer()
+    return (exists("b:loaded_AutoClose") && b:loaded_AutoClose)
 endfunction
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -203,62 +275,10 @@ endfunction
 let s:mapRemap = {'|': '<Bar>'}
 let s:argRemap = {'"': '\"'}
 
-" let user define which character he/she wants to autocomplete
-if exists("g:AutoClosePairs") && type(g:AutoClosePairs) == type({})
-    let s:charsToClose = g:AutoClosePairs
-    unlet g:AutoClosePairs
-else
-    let s:charsToClose = {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'"}
-endif
-
-" let user define in which regions the autocomplete feature should not occur
-if exists("g:AutoCloseProtectedRegions") && type(g:AutoCloseProtectedRegions) == type([])
-    let s:protectedRegions = g:AutoCloseProtectedRegions
-    unlet g:AutoCloseProtectedRegions
-else
-    let s:protectedRegions = ["Comment", "String", "Character"]
-endif
-
-" let user define if he/she wants the plugin turned on when vim start. Defaul is YES
-if exists("g:AutoCloseOn") && type(g:AutoCloseOn) == type(0)
-    let s:running = g:AutoCloseOn
-    unlet g:AutoCloseOn
-else
-    let s:running = 1
-endif
-
-" create appropriate maps to defined open/close characters
-for key in keys(s:charsToClose)
-    let map_open = ( has_key(s:mapRemap, key) ? s:mapRemap[key] : key )
-    let map_close = ( has_key(s:mapRemap, s:charsToClose[key]) ? s:mapRemap[s:charsToClose[key]] : s:charsToClose[key] )
-
-    let open_func_arg = ( has_key(s:argRemap, map_open) ? '"' . s:argRemap[map_open] . '"' : '"' . map_open . '"' )
-    let close_func_arg = ( has_key(s:argRemap, map_close) ? '"' . s:argRemap[map_close] . '"' : '"' . map_close . '"' )
-
-    if key == s:charsToClose[key]
-        exec "inoremap <silent> " . map_open . " <C-R>=<SID>CheckPair(" . open_func_arg . ")<CR>"
-    else
-        exec "inoremap <silent> " . map_open . " <C-R>=<SID>InsertPair(" . open_func_arg . ")<CR>"
-        exec "inoremap <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
-    endif
-endfor
-exec "inoremap <silent> <BS> <C-R>=<SID>Backspace()<CR>"
-
-" Extra mapping
-" Fix the re-do feature:
-inoremap <buffer> <Esc> <C-R>=<SID>FlushBuffer()<CR><Esc>
-
-" Flush the char buffer on mouse click:
-inoremap <buffer> <LeftMouse> <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
-inoremap <buffer> <RightMouse> <C-R>=<SID>FlushBuffer()<CR><RightMouse>
-
-" Flush the char buffer on key movements:
-inoremap <buffer> <Left> <C-R>=<SID>FlushBuffer()<CR><Left>
-inoremap <buffer> <Right> <C-R>=<SID>FlushBuffer()<CR><Right>
-inoremap <buffer> <Up> <C-R>=<SID>FlushBuffer()<CR><Up>
-inoremap <buffer> <Down> <C-R>=<SID>FlushBuffer()<CR><Down>
+autocmd FileType * call <SID>CreateMaps()
+autocmd BufNewFile,BufRead,BufEnter * if !<SID>IsLoadedOnBuffer() | call <SID>CreateMaps() | endif
 
 " Define convenient commands
-command! AutoCloseOn :let s:running = 1
-command! AutoCloseOff :let s:running = 0
+command! AutoCloseOn :let b:AutoCloseOn = 1
+command! AutoCloseOff :let b:AutoCloseOn = 0
 command! AutoCloseToggle :call s:ToggleAutoClose()
