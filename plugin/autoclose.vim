@@ -86,7 +86,7 @@ function! s:FlushBuffer()
     if exists("b:AutoCloseBuffer")
         let l:len = len(b:AutoCloseBuffer)
         if l:len > 0
-            let l:result = join(b:AutoCloseBuffer, '') . repeat("\<Left>", l:len - 1)
+            let l:result = join(b:AutoCloseBuffer, '') . repeat("\<Left>", l:len)
             let b:AutoCloseBuffer = []
             call s:EraseCharsOnLine(l:len)
         endif
@@ -187,7 +187,7 @@ function! s:ExpandEnter()
     set ve=all
 
     if b:AutoCloseOn && s:IsEmptyPair()
-        let l:result = s:FlushBuffer() . "\<Left>\<CR>\<Esc>O"
+        let l:result = s:FlushBuffer() . "\<CR>\<Esc>O"
     endif
 
     exec "set ve=" . l:save_ve
