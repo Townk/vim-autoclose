@@ -68,6 +68,16 @@ function! s:IsForbidden(char)
     return l:result && l:region == 'Comment'
 endfunction
 
+function! s:AllowQuote(char)
+    if b:AutoCloseSmartQuote && a:char == "'"
+        let l:prev = s:GetPrevChar()
+        if l:prev == "\\" || l:prev =~ '[a-zA-Z0-9]'
+            return 0
+        endif
+    endif
+    return 1
+endfunction 
+
 function! s:PushBuffer(char)
     if !exists("b:AutoCloseBuffer")
         let b:AutoCloseBuffer = []
@@ -122,7 +132,7 @@ function! s:InsertPair(char)
 
     let l:next = s:GetNextChar()
     let l:result = a:char
-    if b:AutoCloseOn && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w')
+    if b:AutoCloseOn && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w') && s:AllowQuote(a:char)
         call s:InsertCharsOnLine(b:AutoClosePairs[a:char])
         call s:PushBuffer(b:AutoClosePairs[a:char])
     endif
@@ -256,6 +266,15 @@ function! s:DefineVariables()
             let b:AutoCloseExpandChars = g:AutoCloseExpandChars
         else
             let b:AutoCloseExpandChars = ["<CR>"]
+        endif
+    endif
+
+    " let user define if he/she wants the plugin to do quotes on a smart way
+    if !exists("b:AutoCloseSmartQuote") || type(b:AutoCloseSmartQuote) != type(0)
+        if exists("g:AutoCloseSmartQuote") && type(g:AutoCloseSmartQuote) == type(0)
+            let b:AutoCloseSmartQuote = g:AutoCloseSmartQuote
+        else
+            let b:AutoCloseSmartQuote = 1
         endif
     endif
 
