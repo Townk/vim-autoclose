@@ -255,7 +255,7 @@ function! s:DefineVariables()
         if exists("g:AutoCloseExpandChars") && type(g:AutoCloseExpandChars) == type([])
             let b:AutoCloseExpandChars = g:AutoCloseExpandChars
         else
-            let b:AutoCloseExpandChars = []
+            let b:AutoCloseExpandChars = ["<CR>"]
         endif
     endif
 
