@@ -91,6 +91,12 @@ function! s:PopBuffer()
 	endif
 endfunction
 
+function! s:EmptyBuffer()
+    if exists("b:AutoCloseBuffer")
+        let b:AutoCloseBuffer = []
+    endif
+endfunction
+
 function! s:FlushBuffer()
     let l:result = ''
     if exists("b:AutoCloseBuffer")
@@ -357,8 +363,8 @@ let s:argRemap = {'"': '\"'}
 
 autocmd FileType * call <SID>CreateMaps()
 autocmd BufNewFile,BufRead,BufEnter * if !<SID>IsLoadedOnBuffer() | call <SID>CreateMaps() | endif
-autocmd InsertEnter * call <SID>FlushBuffer()
-autocmd BufEnter * if mode() == 'i' | call <SID>FlushBuffer() | endif
+autocmd InsertEnter * call <SID>EmptyBuffer()
+autocmd BufEnter * if mode() == 'i' | call <SID>EmptyBuffer() | endif
 
 " Define convenient commands
 command! AutoCloseOn :let b:AutoCloseOn = 1
