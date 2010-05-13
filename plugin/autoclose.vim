@@ -22,18 +22,26 @@ set cpo&vim             " go into nocompatible-mode
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Functions
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-function! s:GetNextChar()
+function! s:GetCharAhead(len)
     if col('$') == col('.')
         return "\0"
     endif
-    return strpart(getline('.'), col('.')-1, 1)
+    return strpart(getline('.'), col('.')-2 + a:len, 1)
 endfunction
 
-function! s:GetPrevChar()
+function! s:GetCharBehind(len)
     if col('.') == 1
         return "\0"
     endif
-    return strpart(getline('.'), col('.')-2, 1)
+    return strpart(getline('.'), col('.') - (1 + a:len), 1)
+endfunction
+
+function! s:GetNextChar()
+    return s:GetCharAhead(1)
+endfunction
+
+function! s:GetPrevChar()
+    return s:GetCharBehind(1)
 endfunction
 
 function! s:IsEmptyPair()
@@ -68,15 +76,84 @@ function! s:IsForbidden(char)
     return l:result && l:region == 'Comment'
 endfunction
 
-function! s:AllowQuote(char)
-    if b:AutoCloseSmartQuote && a:char == "'"
-        let l:prev = s:GetPrevChar()
-        if l:prev == "\\" || l:prev =~ '[a-zA-Z0-9]'
-            return 0
+function! s:AllowQuote(char, isBS)
+    let l:result = 1
+    if b:AutoCloseSmartQuote
+        let l:initPos = 1 + (a:isBS ? 1 : 0)
+        let l:charBehind = s:GetCharBehind(l:initPos)
+        let l:prev = l:charBehind
+        let l:backSlashCount = 0
+        while l:charBehind == '\'
+            let l:backSlashCount = l:backSlashCount + 1
+            let l:charBehind = s:GetCharBehind(l:initPos + l:backSlashCount)
+        endwhile
+
+        if l:backSlashCount % 2
+            let l:result = 0
+        else
+            if a:char == "'" && l:prev =~ '[a-zA-Z0-9]'
+                let l:result = 0
+            endif
         endif
     endif
-    return 1
+    return l:result
 endfunction 
+
+function! s:RemoveQuotes(charList, quote)
+    let l:ignoreNext = 0
+    let l:quoteOpened = 0
+    let l:removeStart = 0
+    let l:toRemove = []
+
+    for i in range(len(a:charList))
+        if l:ignoreNext
+            let l:ignoreNext = 0
+            continue
+        endif
+
+        if a:charList[i] == '\' && b:AutoCloseSmartQuote
+            let l:ignoreNext = 1
+        elseif a:charList[i] == a:quote
+            if l:quoteOpened
+                let l:quoteOpened = 0
+                call add(l:toRemove, [l:removeStart, i])
+            else
+                let l:quoteOpened = 1
+                let l:removeStart = i
+            endif
+        endif
+    endfor
+    for [from, to] in l:toRemove
+        call remove(a:charList, from, to)
+    endfor
+endfunction
+
+function! s:CountQuotes(char)
+    let l:currPos = col('.')-2
+    let l:line = split(getline('.'), '\zs')[:l:currPos]
+    let l:result = 0
+
+    if l:currPos >= 0
+        for q in b:AutoCloseQuotes
+            call s:RemoveQuotes(l:line, q)
+        endfor
+
+        let l:ignoreNext = 0
+        for c in l:line
+            if l:ignoreNext
+                let l:ignoreNext = 0
+                continue
+            endif
+
+            if c == '\' && b:AutoCloseSmartQuote
+                let l:ignoreNext = 1
+            elseif c == a:char
+                let l:result = l:result + 1
+            endif
+        endfor
+    endif
+    return l:result
+endfunction
 
 function! s:PushBuffer(char)
     if !exists("b:AutoCloseBuffer")
@@ -138,7 +215,7 @@ function! s:InsertPair(char)
 
     let l:next = s:GetNextChar()
     let l:result = a:char
-    if b:AutoCloseOn && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w') && s:AllowQuote(a:char)
+    if b:AutoCloseOn && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w') && s:AllowQuote(a:char, 0)
         call s:InsertCharsOnLine(b:AutoClosePairs[a:char])
         call s:PushBuffer(b:AutoClosePairs[a:char])
     endif
@@ -152,7 +229,7 @@ function! s:ClosePair(char)
     set ve=all
 
     let l:result = a:char
-    if b:AutoCloseOn && s:GetNextChar() == a:char
+    if b:AutoCloseOn && s:GetNextChar() == a:char && s:AllowQuote(a:char, 0)
         call s:EraseCharsOnLine(1)
         call s:PopBuffer()
     endif
@@ -162,18 +239,7 @@ function! s:ClosePair(char)
 endfunction
 
 function! s:CheckPair(char)
-    let l:lastpos = 0
-    let l:occur = stridx(getline('.'), a:char, l:lastpos) == 0 ? 1 : 0
-
-    while l:lastpos > -1
-        let l:lastpos = stridx(getline('.'), a:char, l:lastpos+1)
-        if l:lastpos > col('.')-2
-            break
-        endif
-        if l:lastpos >= 0
-            let l:occur += 1
-        endif
-    endwhile
+    let l:occur = s:CountQuotes(a:char)
 
     if l:occur == 0 || l:occur%2 == 0
         " Opening char
@@ -224,9 +290,11 @@ endfunction
 
 function! s:Backspace()
     let l:save_ve = &ve
+    let l:prev = s:GetPrevChar()
+    let l:next = s:GetNextChar()
     set ve=all
 
-    if b:AutoCloseOn && s:IsEmptyPair()
+    if b:AutoCloseOn && s:IsEmptyPair() && (l:prev != l:next || s:AllowQuote(l:prev, 1))
         call s:EraseCharsOnLine(1)
         call s:PopBuffer()
     endif    
@@ -254,6 +322,15 @@ function! s:DefineVariables()
             let b:AutoClosePairs = g:AutoClosePairs
         else
             let b:AutoClosePairs = {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'"}
+        endif
+    endif
+    "
+    " let user define explicit which chars should be consider quotes
+    if !exists("b:AutoCloseQuotes") || type(b:AutoCloseQuotes) != type([])
+        if exists("g:AutoCloseQuotes") && type(g:AutoCloseQuotes) == type([])
+            let b:AutoCloseQuotes = g:AutoCloseQuotes
+        else
+            let b:AutoCloseQuotes = []
         endif
     endif
 
@@ -295,6 +372,7 @@ function! s:DefineVariables()
 endfunction
 
 function! s:CreatePairsMaps()
+    let l:appendQuote = (len(b:AutoCloseQuotes) == 0)
     " create appropriate maps to defined open/close characters
     for key in keys(b:AutoClosePairs)
         let map_open = ( has_key(s:mapRemap, key) ? s:mapRemap[key] : key )
@@ -306,6 +384,9 @@ function! s:CreatePairsMaps()
         exec "vnoremap <buffer> <silent> <LEADER>a" . map_open . " <Esc>`>a" . map_close .  "<Esc>`<i" . map_open . "<Esc>"
         exec "vnoremap <buffer> <silent> <LEADER>a" . map_close . " <Esc>`>a" . map_close .  "<Esc>`<i" . map_open . "<Esc>"
         if key == b:AutoClosePairs[key]
+            if l:appendQuote
+                call add(b:AutoCloseQuotes, key)
+            endif
             exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>CheckPair(" . open_func_arg . ")<CR>"
         else
             exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>InsertPair(" . open_func_arg . ")<CR>"
