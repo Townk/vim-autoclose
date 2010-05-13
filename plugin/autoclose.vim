@@ -269,7 +269,7 @@ function! s:ExpandEnter()
     set ve=all
 
     if b:AutoCloseOn && s:IsEmptyPair()
-        let l:result = s:FlushBuffer() . "\<CR>\<Esc>O"
+        let l:result = s:FlushBuffer() . "\<CR>\<Esc>kVj=o"
     endif
 
     exec "set ve=" . l:save_ve
