@@ -396,7 +396,7 @@ function! s:CreatePairsMaps()
 
     for key in b:AutoCloseExpandChars
         if key == "<CR>" || key == "\<CR>" || key == ""
-            inoremap <buffer> <silent> <CR> <C-R>=<SID>ExpandEnter()<CR>
+            inoremap <buffer> <silent> <expr> <Esc> pumvisible() ? "\<C-E>" : "\<C-R>=<SID>ExpandEnter()\<CR>"
         else
             exec "inoremap <buffer> <silent> " . key . " <C-R>=<SID>ExpandChar(\"" . key . "\")<CR>"
         endif
@@ -410,7 +410,7 @@ function! s:CreateExtraMaps()
     inoremap <buffer> <silent> <Del> <C-R>=<SID>Delete()<CR>
 
     " Fix the re-do feature:
-    inoremap <buffer> <silent> <Esc> <C-R>=<SID>FlushBuffer()<CR><Esc>
+    inoremap <buffer> <silent> <expr> <Esc> pumvisible() ? "\<C-E>" : "\<C-R>=<SID>FlushBuffer()\<CR>\<Esc>"
 
     " Flush the char buffer on mouse click:
     inoremap <buffer> <silent> <LeftMouse> <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
@@ -419,8 +419,8 @@ function! s:CreateExtraMaps()
     " Flush the char buffer on key movements:
     inoremap <buffer> <silent> <Left> <C-R>=<SID>FlushBuffer()<CR><Left>
     inoremap <buffer> <silent> <Right> <C-R>=<SID>FlushBuffer()<CR><Right>
-    inoremap <buffer> <silent> <Up> <C-R>=<SID>FlushBuffer()<CR><Up>
-    inoremap <buffer> <silent> <Down> <C-R>=<SID>FlushBuffer()<CR><Down>
+    inoremap <buffer> <silent> <expr> <DOWN> pumvisible() ? "\<C-N>" : "\<C-R>=<SID>FlushBuffer()\<CR>\<C-O>gj"
+    inoremap <buffer> <silent> <expr> <UP> pumvisible() ? "\<C-N>" : "\<C-R>=<SID>FlushBuffer()\<CR>\<C-O>gk"
 endfunction
 
 function! s:CreateMaps()
