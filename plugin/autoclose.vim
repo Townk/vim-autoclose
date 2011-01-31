@@ -8,7 +8,7 @@
 " Last modified: 05/11/2010
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-let s:debug = 0
+let s:debug = 1
 
 " check if script is already loaded
 if s:debug == 0 && exists("g:loaded_AutoClose")
@@ -50,7 +50,7 @@ function! s:IsEmptyPair()
     if l:prev == "\0" || l:next == "\0"
         return 0
     endif
-    return (l:prev == l:next && index(b:AutoCloseExpandChars, has_key(s:mapRemap, l:prev) ? s:mapRemap[l:prev] : l:prev) >= 0) || (get(b:AutoClosePairs, l:prev, "\0") == l:next)
+    return (l:prev == l:next) || (get(b:AutoClosePairs, l:prev, "\0") == l:next)
 endfunction
 
 function! s:GetCurrentSyntaxRegion()
@@ -99,58 +99,29 @@ function! s:AllowQuote(char, isBS)
     return l:result
 endfunction 
 
-function! s:RemoveQuotes(charList, quote)
-    let l:ignoreNext = 0
-    let l:quoteOpened = 0
-    let l:removeStart = 0
-    let l:toRemove = []
-
-    for i in range(len(a:charList))
-        if l:ignoreNext
-            let l:ignoreNext = 0
-            continue
-        endif
-
-        if a:charList[i] == '\' && b:AutoCloseSmartQuote
-            let l:ignoreNext = 1
-        elseif a:charList[i] == a:quote
-            if l:quoteOpened
-                let l:quoteOpened = 0
-                call add(l:toRemove, [l:removeStart, i])
-            else
-                let l:quoteOpened = 1
-                let l:removeStart = i
-            endif
-        endif
-    endfor
-    for [from, to] in l:toRemove
-        call remove(a:charList, from, to)
-    endfor
-endfunction
-
 function! s:CountQuotes(char)
     let l:currPos = col('.')-2
-    let l:line = split(getline('.'), '\zs')[:l:currPos]
+    let l:line = strpart(getline('.'), 0, l:currPos+1)
     let l:result = 0
 
     if l:currPos >= 0
         for q in b:AutoCloseQuotes
-            call s:RemoveQuotes(l:line, q)
-        endfor
-
-        let l:ignoreNext = 0
-        for c in l:line
-            if l:ignoreNext
-                let l:ignoreNext = 0
-                continue
+            if b:AutoCloseSmartQuote != 0
+                let l:regex = q . '[ˆ\\' . q . ']*(\\.[ˆ\\' . q . ']*)*' . q
+            else
+                let l:regex = q . '[ˆ' . q . ']*' . q
             endif
 
-            if c == '\' && b:AutoCloseSmartQuote
-                let l:ignoreNext = 1
-            elseif c == a:char
-                let l:result = l:result + 1
-            endif
+            let l:closedQuoteIdx = match(l:line, l:regex)
+            while l:closedQuoteIdx >= 0
+                let l:matchedStr = matchstr(l:line, l:regex, l:closedQuoteIdx)
+                let l:line = strpart(l:line, 0, l:closedQuoteIdx) . strpart(l:line, l:closedQuoteIdx + strlen(l:matchedStr))
+                let l:closedQuoteIdx = match(l:line, l:regex)
+            endwhile
         endfor
+
+        let l:lineSplit = split(l:line, a:char)
+        let l:result = len(l:lineSplit) - 1
     endif
     return l:result
 endfunction
@@ -250,32 +221,6 @@ function! s:CheckPair(char)
     endif
 endfunction
 
-function! s:ExpandChar(char)
-    let l:save_ve = &ve
-    set ve=all
-
-    if b:AutoCloseOn && s:IsEmptyPair()
-        call s:InsertCharsOnLine(a:char)
-        call s:PushBuffer(a:char)
-    endif
-
-    exec "set ve=" . l:save_ve
-    return a:char
-endfunction 
-
-function! s:ExpandEnter()
-    let l:save_ve = &ve
-    let l:result = "\<CR>"
-    set ve=all
-
-    if b:AutoCloseOn && s:IsEmptyPair()
-        let l:result = s:FlushBuffer() . "\<CR>\<Esc>kVj=o"
-    endif
-
-    exec "set ve=" . l:save_ve
-    return l:result
-endfunction
-
 function! s:Delete()
     let l:save_ve = &ve
     set ve=all
@@ -343,15 +288,6 @@ function! s:DefineVariables()
         endif
     endif
 
-    " let user define which characters should be used as expanded characters inside empty pairs
-    if !exists("b:AutoCloseExpandChars") || type(b:AutoCloseExpandChars) != type([])
-        if exists("g:AutoCloseExpandChars") && type(g:AutoCloseExpandChars) == type([])
-            let b:AutoCloseExpandChars = g:AutoCloseExpandChars
-        else
-            let b:AutoCloseExpandChars = ["<CR>"]
-        endif
-    endif
-
     " let user define if he/she wants the plugin to do quotes on a smart way
     if !exists("b:AutoCloseSmartQuote") || type(b:AutoCloseSmartQuote) != type(0)
         if exists("g:AutoCloseSmartQuote") && type(g:AutoCloseSmartQuote) == type(0)
@@ -393,15 +329,6 @@ function! s:CreatePairsMaps()
             exec "inoremap <buffer> <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
         endif
     endfor
-
-    for key in b:AutoCloseExpandChars
-        if key == "<CR>" || key == "\<CR>" || key == ""
-            inoremap <buffer> <silent> <expr> <Esc> pumvisible() ? "\<C-E>" : "\<C-R>=<SID>ExpandEnter()\<CR>"
-        else
-            exec "inoremap <buffer> <silent> " . key . " <C-R>=<SID>ExpandChar(\"" . key . "\")<CR>"
-        endif
-    endfor
-    "inoremap <buffer> <silent> <Space> <C-R>=<SID>ExpandChar("\<Space>")<CR>
 endfunction
 
 function! s:CreateExtraMaps()
