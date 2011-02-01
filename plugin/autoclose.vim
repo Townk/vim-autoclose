@@ -336,21 +336,21 @@ endfunction
 
 function! s:CreateExtraMaps()
     " Extra mapping
-    inoremap <buffer> <silent> <BS> <C-R>=<SID>Backspace()<CR>
-    inoremap <buffer> <silent> <Del> <C-R>=<SID>Delete()<CR>
+    inoremap <buffer> <silent> <BS>         <C-R>=<SID>Backspace()<CR>
+    inoremap <buffer> <silent> <Del>        <C-R>=<SID>Delete()<CR>
 
     " Fix the re-do feature:
-    inoremap <buffer> <silent> <expr> <Esc> pumvisible() ? "\<C-E>" : "\<C-R>=<SID>FlushBuffer()\<CR>\<Esc>"
+    inoremap <buffer> <silent> <Esc>        <C-R>=<SID>FlushBuffer()<CR><Esc>
 
     " Flush the char buffer on mouse click:
-    inoremap <buffer> <silent> <LeftMouse> <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
+    inoremap <buffer> <silent> <LeftMouse>  <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
     inoremap <buffer> <silent> <RightMouse> <C-R>=<SID>FlushBuffer()<CR><RightMouse>
 
     " Flush the char buffer on key movements:
-    inoremap <buffer> <silent> <Left> <C-R>=<SID>FlushBuffer()<CR><Left>
-    inoremap <buffer> <silent> <Right> <C-R>=<SID>FlushBuffer()<CR><Right>
-    inoremap <buffer> <silent> <expr> <DOWN> pumvisible() ? "\<C-N>" : "\<C-R>=<SID>FlushBuffer()\<CR>\<C-O>gj"
-    inoremap <buffer> <silent> <expr> <UP> pumvisible() ? "\<C-N>" : "\<C-R>=<SID>FlushBuffer()\<CR>\<C-O>gk"
+    inoremap <buffer> <silent> <Left>       <C-R>=<SID>FlushBuffer()<CR><Left>
+    inoremap <buffer> <silent> <Right>      <C-R>=<SID>FlushBuffer()<CR><Right>
+    inoremap <buffer> <silent> <DOWN>       <C-R>=<SID>FlushBuffer()<CR><C-O>gj
+    inoremap <buffer> <silent> <UP>         <C-R>=<SID>FlushBuffer()<CR><C-O>gk
 endfunction
 
 function! s:CreateMaps()
