@@ -1,11 +1,11 @@
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " AutoClose.vim - Automatically close pair of characters: ( with ), [ with ], { with }, etc.
 " Version: 2.0
-" Author: Thiago Alves <thiago.salves@gmail.com>
-" Maintainer: Thiago Alves <thiago.salves@gmail.com>
-" URL: http://thiagoalves.org
+" Author: Thiago Alves <talk@thiagoalves.com.br>
+" Maintainer: Thiago Alves <talk@thiagoalves.com.br>
+" URL: http://thiagoalves.com.br
 " Licence: This script is released under the Vim License.
-" Last modified: 05/11/2010
+" Last modified: 02/01/2011
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 let s:debug = 1
@@ -73,7 +73,7 @@ function! s:IsForbidden(char)
     endif
     let l:region = s:GetCurrentSyntaxRegionIf(a:char)
     let l:result = index(b:AutoCloseProtectedRegions, l:region) >= 0
-    return l:result && l:region == 'Comment'
+    return l:result || l:region == 'Comment'
 endfunction
 
 function! s:AllowQuote(char, isBS)
@@ -100,8 +100,8 @@ function! s:AllowQuote(char, isBS)
 endfunction 
 
 function! s:CountQuotes(char)
-    let l:currPos = col('.')-2
-    let l:line = strpart(getline('.'), 0, l:currPos+1)
+    let l:currPos = col('.')-1
+    let l:line = strpart(getline('.'), 0, l:currPos)
     let l:result = 0
 
     if l:currPos >= 0
@@ -120,8 +120,11 @@ function! s:CountQuotes(char)
             endwhile
         endfor
 
-        let l:lineSplit = split(l:line, a:char)
-        let l:result = len(l:lineSplit) - 1
+        for c in split(l:line, '\zs')
+            if c == a:char
+                let l:result = l:result + 1
+            endif
+        endfor
     endif
     return l:result
 endfunction
@@ -200,7 +203,7 @@ function! s:ClosePair(char)
     set ve=all
 
     let l:result = a:char
-    if b:AutoCloseOn && s:GetNextChar() == a:char && s:AllowQuote(a:char, 0)
+    if b:AutoCloseOn && s:GetNextChar() == a:char
         call s:EraseCharsOnLine(1)
         call s:PopBuffer()
     endif
