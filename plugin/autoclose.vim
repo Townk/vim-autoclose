@@ -5,7 +5,7 @@
 " Maintainer: Thiago Alves <talk@thiagoalves.com.br>
 " URL: http://thiagoalves.com.br
 " Licence: This script is released under the Vim License.
-" Last modified: 02/01/2011
+" Last modified: 02/02/2011
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 let s:debug = 1
@@ -308,6 +308,15 @@ function! s:DefineVariables()
             let b:AutoCloseOn = 1
         endif
     endif
+
+    " let user define if he/she wants the plugin preserv the completion chars into the ". register
+    if !exists("b:AutoClosePreservDotReg") || type(b:AutoClosePreservDotReg) != type(0)
+        if exists("g:AutoClosePreservDotReg") && type(g:AutoClosePreservDotReg) == type(0)
+            let b:AutoClosePreservDotReg = g:AutoClosePreservDotReg
+        else
+            let b:AutoClosePreservDotReg = 1
+        endif
+    endif
 endfunction
 
 function! s:CreatePairsMaps()
@@ -339,8 +348,9 @@ function! s:CreateExtraMaps()
     inoremap <buffer> <silent> <BS>         <C-R>=<SID>Backspace()<CR>
     inoremap <buffer> <silent> <Del>        <C-R>=<SID>Delete()<CR>
 
-    " Fix the re-do feature:
-    inoremap <buffer> <silent> <Esc>        <C-R>=<SID>FlushBuffer()<CR><Esc>
+    if b:AutoClosePreservDotReg == 1
+        " Fix the re-do feature:
+            inoremap <buffer> <silent> <Esc>   <C-R>=<SID>FlushBuffer()<CR><Esc>
 
     " Flush the char buffer on mouse click:
     inoremap <buffer> <silent> <LeftMouse>  <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
@@ -351,6 +361,7 @@ function! s:CreateExtraMaps()
     inoremap <buffer> <silent> <Right>      <C-R>=<SID>FlushBuffer()<CR><Right>
     inoremap <buffer> <silent> <DOWN>       <C-R>=<SID>FlushBuffer()<CR><C-O>gj
     inoremap <buffer> <silent> <UP>         <C-R>=<SID>FlushBuffer()<CR><C-O>gk
+    endif
 endfunction
 
 function! s:CreateMaps()
