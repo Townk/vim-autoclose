@@ -317,6 +317,57 @@ function! s:DefineVariables()
             let b:AutoClosePreservDotReg = 1
         endif
     endif
+
+    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
+    " the <Esc> key is pressed
+    if !exists("b:AutoClosePumvisibleEsc") || type(b:AutoClosePumvisibleEsc) != type("")
+        if exists("g:AutoClosePumvisibleEsc") && type(g:AutoClosePumvisibleEsc) == type("")
+            let b:AutoClosePumvisibleEsc = g:AutoClosePumvisibleEsc
+        else
+            let b:AutoClosePumvisibleEsc = ""
+        endif
+    endif
+
+    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
+    " the <Left> key is pressed
+    if !exists("b:AutoClosePumvisibleLeft") || type(b:AutoClosePumvisibleLeft) != type("")
+        if exists("g:AutoClosePumvisibleLeft") && type(g:AutoClosePumvisibleLeft) == type("")
+            let b:AutoClosePumvisibleLeft = g:AutoClosePumvisibleLeft
+        else
+            let b:AutoClosePumvisibleLeft = ""
+        endif
+    endif
+
+    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
+    " the <Right> key is pressed
+    if !exists("b:AutoClosePumvisibleRight") || type(b:AutoClosePumvisibleRight) != type("")
+        if exists("g:AutoClosePumvisibleRight") && type(g:AutoClosePumvisibleRight) == type("")
+            let b:AutoClosePumvisibleRight = g:AutoClosePumvisibleRight
+        else
+            let b:AutoClosePumvisibleRight = ""
+        endif
+    endif
+
+    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
+    " the <Up> key is pressed
+    if !exists("b:AutoClosePumvisibleUp") || type(b:AutoClosePumvisibleUp) != type("")
+        if exists("g:AutoClosePumvisibleUp") && type(g:AutoClosePumvisibleUp) == type("")
+            let b:AutoClosePumvisibleUp = g:AutoClosePumvisibleUp
+        else
+            let b:AutoClosePumvisibleUp = ""
+        endif
+    endif
+
+    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
+    " the <Down> key is pressed
+    if !exists("b:AutoClosePumvisibleDown") || type(b:AutoClosePumvisibleDown) != type("")
+        if exists("g:AutoClosePumvisibleDown") && type(g:AutoClosePumvisibleDown) == type("")
+            let b:AutoClosePumvisibleDown = g:AutoClosePumvisibleDown
+        else
+            let b:AutoClosePumvisibleDown = ""
+        endif
+    endif
+
 endfunction
 
 function! s:CreatePairsMaps()
@@ -350,17 +401,40 @@ function! s:CreateExtraMaps()
 
     if b:AutoClosePreservDotReg == 1
         " Fix the re-do feature:
+        if !empty(b:AutoClosePumvisibleEsc)
+            exec "inoremap <buffer> <silent> <expr>  <Esc>  pumvisible() ? \"\\" . b:AutoClosePumvisibleEsc . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Esc>\""
+        else
             inoremap <buffer> <silent> <Esc>   <C-R>=<SID>FlushBuffer()<CR><Esc>
+        endif
 
-    " Flush the char buffer on mouse click:
-    inoremap <buffer> <silent> <LeftMouse>  <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
-    inoremap <buffer> <silent> <RightMouse> <C-R>=<SID>FlushBuffer()<CR><RightMouse>
+        " Flush the char buffer on key movements:
+        if !empty(b:AutoClosePumvisibleLeft)
+            exec "inoremap <buffer> <silent> <expr>  <Left>  pumvisible() ? \"\\" . b:AutoClosePumvisibleLeft . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Left>\""
+        else
+            inoremap <buffer> <silent> <Left>  <C-R>=<SID>FlushBuffer()<CR><Left>
+        endif
+        
+        if !empty(b:AutoClosePumvisibleRight)
+            exec "inoremap <buffer> <silent> <expr>  <Right>  pumvisible() ? \"\\" . b:AutoClosePumvisibleRight . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Right>\""
+        else
+            inoremap <buffer> <silent> <Right> <C-R>=<SID>FlushBuffer()<CR><Right>
+        endif
 
-    " Flush the char buffer on key movements:
-    inoremap <buffer> <silent> <Left>       <C-R>=<SID>FlushBuffer()<CR><Left>
-    inoremap <buffer> <silent> <Right>      <C-R>=<SID>FlushBuffer()<CR><Right>
-    inoremap <buffer> <silent> <DOWN>       <C-R>=<SID>FlushBuffer()<CR><C-O>gj
-    inoremap <buffer> <silent> <UP>         <C-R>=<SID>FlushBuffer()<CR><C-O>gk
+        if !empty(b:AutoClosePumvisibleDown)
+            exec "inoremap <buffer> <silent> <expr>  <Down>  pumvisible() ? \"\\" . b:AutoClosePumvisibleDown . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Down>\""
+        else
+            inoremap <buffer> <silent> <Down>  <C-R>=<SID>FlushBuffer()<CR><Down>
+        endif
+
+        if !empty(b:AutoClosePumvisibleUp)
+            exec "inoremap <buffer> <silent> <expr>  <Up>  pumvisible() ? \"\\" . b:AutoClosePumvisibleUp . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Up>\""
+        else
+            inoremap <buffer> <silent> <Up>    <C-R>=<SID>FlushBuffer()<CR><Up>
+        endif
+
+        " Flush the char buffer on mouse click:
+        inoremap <buffer> <silent> <LeftMouse>  <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
+        inoremap <buffer> <silent> <RightMouse> <C-R>=<SID>FlushBuffer()<CR><RightMouse>
     endif
 endfunction
 
