@@ -9,25 +9,21 @@
                                                                     *ac_intro*
 1. Overview~
 
-    This plugin was  born  as  a  personal  need  to  have some little special
-features from other editors into my preferred one.  The Eclipse IDE editor has
-an auto-complete for  open-close  pair  of  characters  feature  that I always
+    This  plugin was  born  as a  personal  need to  get  some little  special
+features from other editors into my  preferred one. The Eclipse IDE editor has
+an  auto-complete for  open-close pair  of  characters feature  that I  always
 wanted into Vim.
 
-    As soon  as you type  a character that  could have a  close pair,  Eclipse
-automatically puts its  pair in front of your cursor,  and  if you continue to
-type and type  the close character,  Eclipse is smart enough  to not insert it
-again (it just move your cursor one character forward).
+    As  soon as  you type  a character  that could  have a  matching (closing)
+counterpart,  Eclipse automatically  puts  its counterpart  in  front of  your
+cursor, and it is smart enough  to ignore the closing character afterwards, if
+typed, but just moves your cursor one character forward.
 
-    But the Eclipse editor don't stop  there.  If you type an "open" character
-on any part of your code that  should not have a pair completion,  it will not
-insert the close character for you.
+    But  the Eclipse  editor  does not  stop  there. If  you  type an  opening
+character on any part of your code  that should not have a pair completion, it
+will not insert the closing character for you.
 
-    The AutoClose plugin is an attempt to reproduce this behavior on Vim.
-
-    This document will  guide you through the features that  I put inside this
-plugin as well  to options that you can  use to personalize it as  long as you
-want.
+    The AutoClose plugin is an attempt to reproduce this behavior for Vim.
 
     The following is covered in this document:
 
@@ -35,10 +31,10 @@ want.
     2. Under the hood                          |ac_details|
        2.1 Mappings                            |ac_mappings|
     3. Configuring                             |ac_config|
-       3.1 Definning characters to auto close  |ac_charstoclose|
-       3.2 Definning protected regions         |ac_protectedregions|
+       3.1 Defining characters to auto close   |ac_charstoclose|
+       3.2 Defining protected regions          |ac_protectedregions|
        3.3 Turning AutoComplete on and off     |ac_turnon|
-    4. Knowing probles                         |ac_problems|
+    4. Known problems                          |ac_problems|
 
 ==============================================================================
                                                                   *ac_details*
@@ -55,8 +51,8 @@ drastically the whole work of the plugin.
                                                                  *ac_mappings*
 2.1 Mappings~
 
-    Every character that  is defined to has  a close pair is mapped  to one of
-three possible functions:
+    Every character that is defined to have a closing counterpart is mapped to
+one of three possible functions:
 
     1. OpenChar
     2. CloseChar
@@ -80,12 +76,12 @@ an already typed char.
                                                                    *ac_config*
 3. Configuring~
 
-    Its possible to personalize AutoClose plugin in two ways:
+    It is possible to personalize the AutoClose plugin in two ways:
 
     1. Setting which character will have which pair to close
-    2. Definning regions where the auto close will not happen
+    2. Defining regions where the auto close will not happen
 
-    Both settings are made by definning a special variable to each case.
+    Both settings are made by defining a special variable for each case.
 
                                             *ac_charstoclose* *AutoClosePairs*
 3.1 Definning characters to auto close~
@@ -181,11 +177,11 @@ used to represent cursor position here):
     ~
 <
     I'm still not sure if there is  a solution to this problem because this is
-a normal behavior  of Vim that usually  cache what you are  entering in insert
+a normal behavior  of Vim that usually caches what you are  entering in insert
 mode until a movement key (\<Left>, \<Right>, \<Up>, \<Down> and possibly some
-others) is pressed and you start to type again.
+others) is pressed and you start typing again.
 
-    Questions or sugestions, please send me an email.
+    If you have questions or suggestions, please send me an email.
 
 ------------------------------------------------------------------------------
- vim:tw=78:fo=tcq2:isk=!-~,^*,^\|,^\":ts=8:ft=help:norl:
+ vim:tw=78:fo=tcq2:ai:isk=!-~,^*,^\|,^\":ts=8:ft=help:norl:
