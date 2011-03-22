@@ -19,6 +19,12 @@ let g:loaded_AutoClose = 1
 let s:global_cpo = &cpo " store compatible-mode in local variable
 set cpo&vim             " go into nocompatible-mode
 
+" Determine if special handling is required for xterm/screen/vt100
+" movement keys.
+let s:needspecialkeyhandling = &term[:4] == "xterm"
+      \ || &term[:5] == "screen" || &term[:4] == "linux"
+      \ || &term[:3] == "rxvt" || &term[:4] == "urxvt"
+
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Functions
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -318,45 +324,24 @@ function! s:DefineVariables()
         endif
     endif
 
-    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
-    " the <Esc> key is pressed
-    if !exists("b:AutoClosePumvisibleEsc") || type(b:AutoClosePumvisibleEsc) != type("")
-        if exists("g:AutoClosePumvisibleEsc") && type(g:AutoClosePumvisibleEsc) == type("")
-            let b:AutoClosePumvisibleEsc = g:AutoClosePumvisibleEsc
-        else
-            let b:AutoClosePumvisibleEsc = ""
+    " Let the user define if he/she wants the plugin to do special actions when the
+    " popup menu is visible and a movement key is pressed.
+    for key in s:movementKeys
+        if exists("b:AutoClosePumvisible" . key)
+            exec 'let l:var = b:AutoClosePumvisible' . key
+            if type(l:key) == type("")
+                continue
+            endif
         endif
-    endif
-
-    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
-    " the <Left> key is pressed
-    if !exists("b:AutoClosePumvisibleLeft") || type(b:AutoClosePumvisibleLeft) != type("")
-        if exists("g:AutoClosePumvisibleLeft") && type(g:AutoClosePumvisibleLeft) == type("")
-            let b:AutoClosePumvisibleLeft = g:AutoClosePumvisibleLeft
+        if exists("g:AutoClosePumvisible" . key)
+            exec 'let l:var = g:AutoClosePumvisible' . key
+            if type(l:var) == type("")
+                let b:AutoClosePumvisibleDown = g:AutoClosePumvisibleDown
+            endif
         else
-            let b:AutoClosePumvisibleLeft = ""
+            exec 'let b:AutoClosePumvisible' . key . ' = ""'
         endif
-    endif
-
-    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
-    " the <Right> key is pressed
-    if !exists("b:AutoClosePumvisibleRight") || type(b:AutoClosePumvisibleRight) != type("")
-        if exists("g:AutoClosePumvisibleRight") && type(g:AutoClosePumvisibleRight) == type("")
-            let b:AutoClosePumvisibleRight = g:AutoClosePumvisibleRight
-        else
-            let b:AutoClosePumvisibleRight = ""
-        endif
-    endif
-
-    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
-    " the <Up> key is pressed
-    if !exists("b:AutoClosePumvisibleUp") || type(b:AutoClosePumvisibleUp) != type("")
-        if exists("g:AutoClosePumvisibleUp") && type(g:AutoClosePumvisibleUp) == type("")
-            let b:AutoClosePumvisibleUp = g:AutoClosePumvisibleUp
-        else
-            let b:AutoClosePumvisibleUp = ""
-        endif
-    endif
+    endfor
 
     " let user define if he/she wants the plugin to do special action when popup menu is visible and 
     " the <Down> key is pressed
@@ -392,6 +377,7 @@ function! s:CreatePairsMaps()
             exec "inoremap <buffer> <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
         endif
     endfor
+
 endfunction
 
 function! s:CreateExtraMaps()
@@ -400,37 +386,18 @@ function! s:CreateExtraMaps()
     inoremap <buffer> <silent> <Del>        <C-R>=<SID>Delete()<CR>
 
     if b:AutoClosePreservDotReg == 1
-        " Fix the re-do feature:
-        if !empty(b:AutoClosePumvisibleEsc)
-            exec "inoremap <buffer> <silent> <expr>  <Esc>  pumvisible() ? \"\\" . b:AutoClosePumvisibleEsc . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Esc>\""
-        else
-            inoremap <buffer> <silent> <Esc>   <C-R>=<SID>FlushBuffer()<CR><Esc>
-        endif
-
-        " Flush the char buffer on key movements:
-        if !empty(b:AutoClosePumvisibleLeft)
-            exec "inoremap <buffer> <silent> <expr>  <Left>  pumvisible() ? \"\\" . b:AutoClosePumvisibleLeft . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Left>\""
-        else
-            inoremap <buffer> <silent> <Left>  <C-R>=<SID>FlushBuffer()<CR><Left>
-        endif
-
-        if !empty(b:AutoClosePumvisibleRight)
-            exec "inoremap <buffer> <silent> <expr>  <Right>  pumvisible() ? \"\\" . b:AutoClosePumvisibleRight . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Right>\""
-        else
-            inoremap <buffer> <silent> <Right> <C-R>=<SID>FlushBuffer()<CR><Right>
-        endif
-
-        if !empty(b:AutoClosePumvisibleDown)
-            exec "inoremap <buffer> <silent> <expr>  <Down>  pumvisible() ? \"\\" . b:AutoClosePumvisibleDown . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Down>\""
-        else
-            inoremap <buffer> <silent> <Down>  <C-R>=<SID>FlushBuffer()<CR><Down>
-        endif
-
-        if !empty(b:AutoClosePumvisibleUp)
-            exec "inoremap <buffer> <silent> <expr>  <Up>  pumvisible() ? \"\\" . b:AutoClosePumvisibleUp . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Up>\""
-        else
-            inoremap <buffer> <silent> <Up>    <C-R>=<SID>FlushBuffer()<CR><Up>
-        endif
+        " Fix the re-do feature by flushing the char buffer on key movements (including Escape):
+        for key in s:movementKeys
+            if s:needspecialkeyhandling
+                exec 'imap <buffer> <silent>' . s:movementKeysXterm[key] . ' <'.key.'>'
+            endif
+            exe 'let l:pvisiblemap = b:AutoClosePumvisible' . key
+            if !empty(l:pvisiblemap)
+                exec "inoremap <buffer> <silent> <expr>  <" . key . ">  pumvisible() ? \"\\" . pvisiblemap . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<" . key . ">\""
+            else
+                exec 'inoremap <buffer> <silent> <' . key . '>    <C-R>=<SID>FlushBuffer()<CR><' . key . '>'
+            endif
+        endfor
 
         " Flush the char buffer on mouse click:
         inoremap <buffer> <silent> <LeftMouse>  <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
@@ -456,6 +423,12 @@ endfunction
 " here is a dictionary of characters that need to be converted before being used as map
 let s:mapRemap = {'|': '<Bar>', ' ': '<Space>'}
 let s:argRemap = {'"': '\"'}
+
+let s:movementKeys = ['Esc', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown']
+if s:needspecialkeyhandling
+  " map s:movementKeys to xterm equivalent
+  let s:movementKeysXterm = {'Esc': '<C-[>', 'Up': '<C-[>OA', 'Down': '<C-[>OB', 'Left': '<C-[>OD', 'Right': '<C-[>OC', 'Home': '<C-[>OH', 'End': '<C-[>OF', 'PageUp': '<C-[>[5~', 'PageDown': '<C-[>[6~'}
+endif
 
 augroup <Plug>(autoclose)
 au!
