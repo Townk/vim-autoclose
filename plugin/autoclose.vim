@@ -97,7 +97,7 @@ function! s:AllowQuote(char, isBS)
         endif
     endif
     return l:result
-endfunction 
+endfunction
 
 function! s:CountQuotes(char)
     let l:currPos = col('.')-1
@@ -138,8 +138,8 @@ endfunction
 
 function! s:PopBuffer()
     if exists("b:AutoCloseBuffer") && len(b:AutoCloseBuffer) > 0
-	   call remove(b:AutoCloseBuffer, 0)
-	endif
+        call remove(b:AutoCloseBuffer, 0)
+    endif
 endfunction
 
 function! s:EmptyBuffer()
@@ -158,7 +158,7 @@ function! s:FlushBuffer()
             call s:EraseCharsOnLine(l:len)
         endif
     endif
-	return l:result
+    return l:result
 endfunction
 
 function! s:InsertCharsOnLine(str)
@@ -181,7 +181,7 @@ function! s:EraseCharsOnLine(len)
     else
         call setline('.', l:line[:l:column] . l:line[l:column + a:len + 1:])
     endif
-endfunction 
+endfunction
 
 function! s:InsertPair(char)
     let l:save_ve = &ve
@@ -230,7 +230,7 @@ function! s:Delete()
 
     if exists("b:AutoCloseBuffer") && len(b:AutoCloseBuffer) > 0 && b:AutoCloseBuffer[0] == s:GetNextChar()
         call s:PopBuffer()
-    endif    
+    endif
 
     exec "set ve=" . l:save_ve
     return "\<Del>"
@@ -245,7 +245,7 @@ function! s:Backspace()
     if b:AutoCloseOn && s:IsEmptyPair() && (l:prev != l:next || s:AllowQuote(l:prev, 1))
         call s:EraseCharsOnLine(1)
         call s:PopBuffer()
-    endif    
+    endif
 
     exec "set ve=" . l:save_ve
     return "\<BS>"
@@ -413,7 +413,7 @@ function! s:CreateExtraMaps()
         else
             inoremap <buffer> <silent> <Left>  <C-R>=<SID>FlushBuffer()<CR><Left>
         endif
-        
+
         if !empty(b:AutoClosePumvisibleRight)
             exec "inoremap <buffer> <silent> <expr>  <Right>  pumvisible() ? \"\\" . b:AutoClosePumvisibleRight . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Right>\""
         else
