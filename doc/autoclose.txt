@@ -100,7 +100,8 @@ default values.
     Following is the default declaration for auto close chars. If this 
 configuration is enought, you don't need to configure nothing:
 >
-    let g:AutoClosePairs = {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'"}
+    let g:AutoClosePairs = {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'",
+      \ '<': '>', '`': '`', '«': '»'}
 <
 
                                       *ac_protectedregions* *acProtectedRegions*

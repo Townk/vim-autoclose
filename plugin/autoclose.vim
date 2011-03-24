@@ -270,88 +270,45 @@ function! s:DefineVariables()
     " all the following variable can be set per buffer or global. If both are set
     " the buffer variable has priority.
 
-    " let user define which character he/she wants to autocomplete
-    if !exists("b:AutoClosePairs") || type(b:AutoClosePairs) != type({})
-        if exists("g:AutoClosePairs") && type(g:AutoClosePairs) == type({})
-            let b:AutoClosePairs = g:AutoClosePairs
-        else
-            let b:AutoClosePairs = {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'"}
-        endif
-    endif
-    "
-    " let user define explicit which chars should be consider quotes
-    if !exists("b:AutoCloseQuotes") || type(b:AutoCloseQuotes) != type([])
-        if exists("g:AutoCloseQuotes") && type(g:AutoCloseQuotes) == type([])
-            let b:AutoCloseQuotes = g:AutoCloseQuotes
-        else
-            let b:AutoCloseQuotes = []
-        endif
-    endif
-
-    " let user define in which regions the autocomplete feature should not occur
-    if !exists("b:AutoCloseProtectedRegions") || type(b:AutoCloseProtectedRegions) != type([])
-        if exists("g:AutoCloseProtectedRegions") && type(g:AutoCloseProtectedRegions) == type([])
-            let b:AutoCloseProtectedRegions = g:AutoCloseProtectedRegions
-        else
-            let b:AutoCloseProtectedRegions = ["Comment", "String", "Character"]
-        endif
-    endif
-
-    " let user define if he/she wants the plugin to do quotes on a smart way
-    if !exists("b:AutoCloseSmartQuote") || type(b:AutoCloseSmartQuote) != type(0)
-        if exists("g:AutoCloseSmartQuote") && type(g:AutoCloseSmartQuote) == type(0)
-            let b:AutoCloseSmartQuote = g:AutoCloseSmartQuote
-        else
-            let b:AutoCloseSmartQuote = 1
-        endif
-    endif
-
-    " let user define if he/she wants the plugin turned on when vim start. Defaul is YES
-    if !exists("b:AutoCloseOn") || type(b:AutoCloseOn) != type(0)
-        if exists("g:AutoCloseOn") && type(g:AutoCloseOn) == type(0)
-            let b:AutoCloseOn = g:AutoCloseOn
-        else
-            let b:AutoCloseOn = 1
-        endif
-    endif
-
-    " let user define if he/she wants the plugin preserv the completion chars into the ". register
-    if !exists("b:AutoClosePreservDotReg") || type(b:AutoClosePreservDotReg) != type(0)
-        if exists("g:AutoClosePreservDotReg") && type(g:AutoClosePreservDotReg) == type(0)
-            let b:AutoClosePreservDotReg = g:AutoClosePreservDotReg
-        else
-            let b:AutoClosePreservDotReg = 1
-        endif
-    endif
+    let defaults = {
+                \ 'AutoClosePairs': {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'",
+                \                    '<': '>', '`': '`', '«': '»'},
+                \ 'AutoCloseQuotes': [],
+                \ 'AutoCloseProtectedRegions': ["Comment", "String", "Character"],
+                \ 'AutoCloseSmartQuote': 1,
+                \ 'AutoCloseOn': 1,
+                \ 'AutoClosePreservDotReg': 1
+                \ }
 
     " Let the user define if he/she wants the plugin to do special actions when the
     " popup menu is visible and a movement key is pressed.
+    " Movement keys used in the menu get mapped to themselves
+    " (Up/Down/PageUp/PageDown).
     for key in s:movementKeys
-        if exists("b:AutoClosePumvisible" . key)
-            exec 'let l:var = b:AutoClosePumvisible' . key
-            if type(l:key) == type("")
+        let defaults['AutoClosePumvisible'.key] = ''
+    endfor
+    for key in s:pumMovementKeys
+        let defaults['AutoClosePumvisible'.key] = '<'.key.'>'
+    endfor
+
+    " Now handle/assign values
+    for key in keys(defaults)
+        if exists('l:var') | unlet l:var | endif
+        if exists('b:'.key)
+            exec 'let l:var = b:' . key
+            if type(l:var) == type(defaults[key])
                 continue
             endif
         endif
-        if exists("g:AutoClosePumvisible" . key)
-            exec 'let l:var = g:AutoClosePumvisible' . key
-            if type(l:var) == type("")
-                let b:AutoClosePumvisibleDown = g:AutoClosePumvisibleDown
+        if exists('g:' . key)
+            exec 'let l:var = g:' . key
+            if type(l:var) == type(defaults[key])
+                exec 'let b:' . key . ' = g:' . key
             endif
         else
-            exec 'let b:AutoClosePumvisible' . key . ' = ""'
+            exec 'let b:' . key . ' = ' . string(defaults[key])
         endif
     endfor
-
-    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
-    " the <Down> key is pressed
-    if !exists("b:AutoClosePumvisibleDown") || type(b:AutoClosePumvisibleDown) != type("")
-        if exists("g:AutoClosePumvisibleDown") && type(g:AutoClosePumvisibleDown) == type("")
-            let b:AutoClosePumvisibleDown = g:AutoClosePumvisibleDown
-        else
-            let b:AutoClosePumvisibleDown = ""
-        endif
-    endif
 
 endfunction
 
@@ -392,10 +349,10 @@ function! s:CreateExtraMaps()
                 exec 'imap <buffer> <silent>' . s:movementKeysXterm[key] . ' <'.key.'>'
             endif
             exe 'let l:pvisiblemap = b:AutoClosePumvisible' . key
-            if !empty(l:pvisiblemap)
-                exec "inoremap <buffer> <silent> <expr>  <" . key . ">  pumvisible() ? \"\\" . pvisiblemap . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<" . key . ">\""
+            if len(l:pvisiblemap)
+              exec "inoremap <buffer> <silent> <expr>  <" . key . ">  pumvisible() ? \"" . l:pvisiblemap . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<" . key . ">\""
             else
-                exec 'inoremap <buffer> <silent> <' . key . '>    <C-R>=<SID>FlushBuffer()<CR><' . key . '>'
+              exec "inoremap <buffer> <silent> <" . key . ">  <C-R>=<SID>FlushBuffer()<CR><" . key . ">"
             endif
         endfor
 
@@ -425,6 +382,7 @@ let s:mapRemap = {'|': '<Bar>', ' ': '<Space>'}
 let s:argRemap = {'"': '\"'}
 
 let s:movementKeys = ['Esc', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown']
+let s:pumMovementKeys = ['Up', 'Down', 'PageUp', 'PageDown'] " list of keys that get mapped to themselves for pumvisible()
 if s:needspecialkeyhandling
   " map s:movementKeys to xterm equivalent
   let s:movementKeysXterm = {'Esc': '<C-[>', 'Up': '<C-[>OA', 'Down': '<C-[>OB', 'Left': '<C-[>OD', 'Right': '<C-[>OC', 'Home': '<C-[>OH', 'End': '<C-[>OF', 'PageUp': '<C-[>[5~', 'PageDown': '<C-[>[6~'}
