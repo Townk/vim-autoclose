@@ -8,7 +8,7 @@
 " Last modified: 02/02/2011
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-let s:debug = 1
+let s:debug = 0
 
 " check if script is already loaded
 if s:debug == 0 && exists("g:loaded_AutoClose")
