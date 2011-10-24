@@ -48,6 +48,8 @@ function! s:GetPrevChar()
     return s:GetCharBehind(1)
 endfunction
 
+" used to implement automatic delection of closing character when opening
+" counterpart is deleted
 function! s:IsEmptyPair()
     let l:prev = s:GetPrevChar()
     let l:next = s:GetNextChar()
@@ -133,6 +135,13 @@ function! s:CountQuotes(char)
     return l:result
 endfunction
 
+" The auto-close buffer is used in a fix of the redo functionality.
+" As we insert characters after cursor, we remember them and at the moment
+" that vim would normally collect the last entered string into dot register
+" (:help ".) - i.e. when esc or a motion key is typed in insert mode - we
+" erase the inserted symbols and pretend that we have just now typed them.
+" This way vim picks them up into dot register as well and user can repeat the
+" typed bit with . command.
 function! s:PushBuffer(char)
     if !exists("b:AutoCloseBuffer")
         let b:AutoCloseBuffer = []
@@ -159,13 +168,13 @@ function! s:FlushBuffer()
         if l:len > 0
             let l:result = join(b:AutoCloseBuffer, '') . repeat("\<Left>", l:len)
             let b:AutoCloseBuffer = []
-            call s:EraseCharsOnLine(l:len)
+            call s:EraseNCharsAtCursor(l:len)
         endif
     endif
     return l:result
 endfunction
 
-function! s:InsertCharsOnLine(str)
+function! s:InsertStringAtCursor(str)
     let l:line = getline('.')
     let l:column = col('.')-2
 
@@ -176,7 +185,7 @@ function! s:InsertCharsOnLine(str)
     endif
 endfunction
 
-function! s:EraseCharsOnLine(len)
+function! s:EraseNCharsAtCursor(len)
     let l:line = getline('.')
     let l:column = col('.')-2
 
@@ -187,53 +196,54 @@ function! s:EraseCharsOnLine(len)
     endif
 endfunction
 
-function! s:InsertPair(char)
-    if ! b:AutoCloseOn || ! has_key(b:AutoClosePairs, a:char) || s:IsForbidden(a:char)
-      return a:char
+" returns the opener, after having inserted its closer if necessary
+function! s:InsertPair(opener)
+    if ! b:AutoCloseOn || ! has_key(b:AutoClosePairs, a:opener) || s:IsForbidden(a:opener)
+      return a:opener
     endif
 
     let l:save_ve = &ve
     set ve=all
 
     let l:next = s:GetNextChar()
-    let l:result = a:char
     " only add closing pair before space or any of the closepair chars
     let close_before = '\s\|\V\[,.;' . escape(join(keys(b:AutoClosePairs) + values(b:AutoClosePairs), ''), ']').']'
-    if (l:next == "\0" || l:next =~ close_before) && s:AllowQuote(a:char, 0)
-        call s:InsertCharsOnLine(b:AutoClosePairs[a:char])
-        call s:PushBuffer(b:AutoClosePairs[a:char])
+    if (l:next == "\0" || l:next =~ close_before) && s:AllowQuote(a:opener, 0)
+        call s:InsertStringAtCursor(b:AutoClosePairs[a:opener])
+        call s:PushBuffer(b:AutoClosePairs[a:opener])
     endif
 
     exec "set ve=" . l:save_ve
-    return l:result
+    return a:opener
 endfunction
 
-function! s:ClosePair(char)
+" returns the closer, after having eaten identical one if necessary
+function! s:ClosePair(closer)
     let l:save_ve = &ve
     set ve=all
 
-    let l:result = a:char
-    if b:AutoCloseOn && s:GetNextChar() == a:char
-        call s:EraseCharsOnLine(1)
+    if b:AutoCloseOn && s:GetNextChar() == a:closer
+        call s:EraseNCharsAtCursor(1)
         call s:PopBuffer()
     endif
 
     exec "set ve=" . l:save_ve
-    return l:result
+    return a:closer
 endfunction
 
-function! s:CheckPair(char)
-    let l:occur = s:CountQuotes(a:char)
-
-    if l:occur == 0 || l:occur%2 == 0
-        " Opening char
+" in case closer is identical with its opener - heuristically decide which one
+" is being typed and act accordingly
+function! s:OpenOrCloseTwinPair(char)
+    if s:CountQuotes(a:char) % 2 == 0
+        " act as opening char
         return s:InsertPair(a:char)
     else
-        " Closing char
+        " act as closing char
         return s:ClosePair(a:char)
     endif
 endfunction
 
+" maintain auto-close buffer when delete key is pressed
 function! s:Delete()
     let l:save_ve = &ve
     set ve=all
@@ -246,6 +256,9 @@ function! s:Delete()
     return "\<Del>"
 endfunction
 
+" when backspace is pressed:
+" - erase an empty pair if backspacing from inside one
+" - maintain auto-close buffer 
 function! s:Backspace()
     let l:save_ve = &ve
     let l:prev = s:GetPrevChar()
@@ -253,7 +266,7 @@ function! s:Backspace()
     set ve=all
 
     if b:AutoCloseOn && s:IsEmptyPair() && (l:prev != l:next || s:AllowQuote(l:prev, 1))
-        call s:EraseCharsOnLine(1)
+        call s:EraseNCharsAtCursor(1)
         call s:PopBuffer()
     endif
 
@@ -341,13 +354,12 @@ function! s:CreatePairsMaps()
             if l:appendQuote
                 call add(b:AutoCloseQuotes, key)
             endif
-            exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>CheckPair(" . open_func_arg . ")<CR>"
+            exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>OpenOrCloseTwinPair(" . open_func_arg . ")<CR>"
         else
             exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>InsertPair(" . open_func_arg . ")<CR>"
             exec "inoremap <buffer> <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
         endif
     endfor
-
 endfunction
 
 function! s:CreateExtraMaps()
@@ -413,3 +425,4 @@ augroup END
 command! AutoCloseOn :let b:AutoCloseOn = 1
 command! AutoCloseOff :let b:AutoCloseOn = 0
 command! AutoCloseToggle :call s:ToggleAutoClose()
+" vim:sw=4:sts=4:
