@@ -111,7 +111,10 @@ function! s:CountQuotes(char)
     let l:result = 0
 
     if l:currPos >= 0
-        for q in b:AutoCloseQuotes
+        for [q,closer] in items(b:AutoClosePairs)
+            " only consider twin pairs
+            if q != closer | continue | endif
+
             if b:AutoCloseSmartQuote != 0
                 let l:regex = q . '[ˆ\\' . q . ']*(\\.[ˆ\\' . q . ']*)*' . q
             else
@@ -258,7 +261,7 @@ endfunction
 
 " when backspace is pressed:
 " - erase an empty pair if backspacing from inside one
-" - maintain auto-close buffer 
+" - maintain auto-close buffer
 function! s:Backspace()
     let l:save_ve = &ve
     let l:prev = s:GetPrevChar()
@@ -283,9 +286,44 @@ function! s:ToggleAutoClose()
     endif
 endfunction
 
+" Parse a whitespace separated line of pairs
+" single characters are assumed to be twin pairs (closer identical to
+" opener)
+function! AutoClose#ParsePairs(string)
+    if type(a:string) == type({})
+        return a:string
+    elseif type(a:string) != type("")
+        echoerr "AutoClose#ParsePairs(): Argument not a dictionary or a string"
+        return {}
+    endif
+
+    let l:dict = {}
+    for pair in split(a:string)
+        " strlen is length in bytes, we want in (wide) characters
+        let l:pairLen = strlen(substitute(pair,'.','x','g'))
+        if l:pairLen == 1
+            " assume a twin pair
+            let l:dict[pair] = pair
+        elseif l:pairLen == 2
+            let l:dict[pair[0]] = pair[1]
+        else
+            echoerr "AutoClose: Bad pair string - a pair longer then two character"
+            echoerr " `- String: " . a:sring
+            echoerr " `- Pair: " . pair . " Pair len: " . l:pairLen
+        endif
+    endfor
+    return l:dict
+endfunction
+
 " this function is made visible for the sake of users
 function! AutoClose#DefaultPairs()
-  return copy({'(': ')', '{': '}', '[': ']', '"': '"', "'": "'", '<': '>', '`': '`', '«': '»'})
+    return AutoClose#ParsePairs("() {} [] <> «» ` \" '")
+endfunction
+
+function! AutoClose#DefaultPairsModified(pairsToAdd,openersToRemove)
+    return filter(
+                \ extend(AutoClose#DefaultPairs(), AutoClose#ParsePairs(a:pairsToAdd), "force"),
+                \ "stridx(a:openersToRemove,v:key)<0")
 endfunction
 
 " Define variables (in the buffer namespace).
@@ -294,7 +332,6 @@ function! s:DefineVariables()
     " The buffer namespace is used internally
     let defaults = {
                 \ 'AutoClosePairs': AutoClose#DefaultPairs(),
-                \ 'AutoCloseQuotes': [],
                 \ 'AutoCloseProtectedRegions': ["Comment", "String", "Character"],
                 \ 'AutoCloseSmartQuote': 1,
                 \ 'AutoCloseOn': 1,
@@ -325,25 +362,20 @@ function! s:DefineVariables()
 endfunction
 
 function! s:CreatePairsMaps()
-    let l:appendQuote = (len(b:AutoCloseQuotes) == 0)
     " create appropriate maps to defined open/close characters
     for key in keys(b:AutoClosePairs)
-        let map_open = ( has_key(s:mapRemap, key) ? s:mapRemap[key] : key )
-        let map_close = ( has_key(s:mapRemap, b:AutoClosePairs[key]) ? s:mapRemap[b:AutoClosePairs[key]] : b:AutoClosePairs[key] )
+        let opener = s:keyName(key)
+        let closer = s:keyName(b:AutoClosePairs[key])
+        let quoted_opener = s:quoteAndEscape(opener)
+        let quoted_closer = s:quoteAndEscape(closer)
 
-        let open_func_arg = ( has_key(s:argRemap, map_open) ? '"' . s:argRemap[map_open] . '"' : '"' . map_open . '"' )
-        let close_func_arg = ( has_key(s:argRemap, map_close) ? '"' . s:argRemap[map_close] . '"' : '"' . map_close . '"' )
-
-        exec "vnoremap <buffer> <silent> <LEADER>a" . map_open . " <Esc>`>a" . map_close .  "<Esc>`<i" . map_open . "<Esc>"
-        exec "vnoremap <buffer> <silent> <LEADER>a" . map_close . " <Esc>`>a" . map_close .  "<Esc>`<i" . map_open . "<Esc>"
+        exec "vnoremap <buffer> <silent> <LEADER>a" . opener . " <Esc>`>a" . closer .  "<Esc>`<i" . opener . "<Esc>"
+        exec "vnoremap <buffer> <silent> <LEADER>a" . closer . " <Esc>`>a" . closer .  "<Esc>`<i" . opener . "<Esc>"
         if key == b:AutoClosePairs[key]
-            if l:appendQuote
-                call add(b:AutoCloseQuotes, key)
-            endif
-            exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>OpenOrCloseTwinPair(" . open_func_arg . ")<CR>"
+            exec "inoremap <buffer> <silent> " . opener . " <C-R>=<SID>OpenOrCloseTwinPair(" . quoted_opener . ")<CR>"
         else
-            exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>InsertPair(" . open_func_arg . ")<CR>"
-            exec "inoremap <buffer> <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
+            exec "inoremap <buffer> <silent> " . opener . " <C-R>=<SID>InsertPair(" . quoted_opener . ")<CR>"
+            exec "inoremap <buffer> <silent> " . closer . " <C-R>=<SID>ClosePair(" . quoted_closer . ")<CR>"
         endif
     endfor
 endfunction
@@ -361,7 +393,7 @@ function! s:CreateExtraMaps()
             endif
             exe 'let l:pvisiblemap = b:AutoClosePumvisible' . key
             if len(l:pvisiblemap)
-              exec "inoremap <buffer> <silent> <expr>  <" . key . ">  pumvisible() ? \"" . l:pvisiblemap . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<" . key . ">\""
+              exec "inoremap <buffer> <silent> <expr>  <" . key . ">  pumvisible() ? '" . l:pvisiblemap . "' : '<C-R>=<SID>FlushBuffer()<CR><" . key . ">'"
             else
               exec "inoremap <buffer> <silent> <" . key . ">  <C-R>=<SID>FlushBuffer()<CR><" . key . ">"
             endif
@@ -385,25 +417,25 @@ function! s:IsLoadedOnBuffer()
     return (exists("b:loaded_AutoClose") && b:loaded_AutoClose)
 endfunction
 
-function! s:setupRubyPairs()
-    let b:AutoClosePairs = AutoClose#DefaultPairs()
-    let b:AutoClosePairs['|'] = '|'
+" map some characters to their key names
+function! s:keyName(char)
+    let s:keyNames = {'|': '<Bar>', ' ': '<Space>'}
+    return get(s:keyNames,a:char,a:char)
 endfunction
 
-function! s:setupShellPairs()
-    let b:AutoClosePairs = AutoClose#DefaultPairs()
-    unlet defaults['AutoClosePairs']['<']
+" escape some characters for use in strings
+function! s:quoteAndEscape(char)
+    let s:escapedChars = {'"': '\"'}
+    return '"' . get(s:escapedChars,a:char,a:char) . '"'
 endfunction
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Configuration
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" here is a dictionary of characters that need to be converted before being used as map
-let s:mapRemap = {'|': '<Bar>', ' ': '<Space>'}
-let s:argRemap = {'"': '\"'}
 
-let s:movementKeys = ['Esc', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown']
-let s:pumMovementKeys = ['Up', 'Down', 'PageUp', 'PageDown'] " list of keys that get mapped to themselves for pumvisible()
+let s:movementKeys = split('Esc Up Down Left Right Home End PageUp PageDown')
+" list of keys that get mapped to themselves for pumvisible()
+let s:pumMovementKeys = split('Up Down PageUp PageDown')
 if s:needspecialkeyhandling
   " map s:movementKeys to xterm equivalent
   let s:movementKeysXterm = {'Esc': '<C-[>', 'Up': '<C-[>OA', 'Down': '<C-[>OB', 'Left': '<C-[>OD', 'Right': '<C-[>OC', 'Home': '<C-[>OH', 'End': '<C-[>OF', 'PageUp': '<C-[>[5~', 'PageDown': '<C-[>[6~'}
@@ -414,8 +446,10 @@ au!
 autocmd BufNewFile,BufRead,BufEnter * if !<SID>IsLoadedOnBuffer() | call <SID>CreateMaps() | endif
 autocmd InsertEnter * call <SID>EmptyBuffer()
 autocmd BufEnter * if mode() == 'i' | call <SID>EmptyBuffer() | endif
-autocmd FileType ruby call <SID>setupRubyPairs()
-autocmd FileType typoscript,zsh,sh call <SID>setupShellPairs()
+autocmd FileType ruby
+            \ let b:AutoClosePairs = AutoClose#DefaultPairsModified("|", "")
+autocmd FileType typoscript,zsh,sh
+            \ let b:AutoClosePairs = AutoClose#DefaultPairsModified("", "<")
 augroup END
 
 " Define convenient commands
