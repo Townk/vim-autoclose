@@ -277,6 +277,15 @@ function! s:Backspace()
     return "\<BS>"
 endfunction
 
+function! s:Space()
+    if b:AutoCloseOn && s:IsEmptyPair()
+        call s:PushBuffer("\<Space>")
+        return "\<Space>\<Space>\<Left>"
+    else
+        return "\<Space>"
+    endif
+endfunction
+
 function! s:ToggleAutoClose()
     let b:AutoCloseOn = !b:AutoCloseOn
     if b:AutoCloseOn
@@ -337,6 +346,7 @@ function! s:DefineVariables()
                 \ 'AutoCloseOn': 1,
                 \ 'AutoClosePreservDotReg': 1,
                 \ 'AutoCloseSelectionWrapPrefix': '<LEADER>a',
+                \ 'AutoCloseExpandSpace': 1,
                 \ }
 
     " Let the user define if he/she wants the plugin to do special actions when the
@@ -390,6 +400,9 @@ function! s:CreateExtraMaps()
     " Extra mapping
     inoremap <buffer> <silent> <BS>         <C-R>=<SID>Backspace()<CR>
     inoremap <buffer> <silent> <Del>        <C-R>=<SID>Delete()<CR>
+    if b:AutoCloseExpandSpace
+        inoremap <buffer> <silent> <Space>      <C-R>=<SID>Space()<CR>
+    endif
 
     if b:AutoClosePreservDotReg == 1
         " Fix the re-do feature by flushing the char buffer on key movements (including Escape):
