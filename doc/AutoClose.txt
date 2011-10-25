@@ -1,9 +1,9 @@
 *AutoClose.txt* Documentation for script AutoClose.vim
->
+
     Script : AutoClose.vim
     Author : Thiago Alves
     Email  : <thiago.salves@gmail.com>
-    Changed: 25/10/2011
+    Changed: 25 October 2011
 
 ==============================================================================
                                                                     *ac_intro*
@@ -33,6 +33,7 @@ will not insert the closing character for you.
        3.1 Defining characters to auto close   |ac_charstoclose|
        3.2 Defining protected regions          |ac_protectedregions|
        3.3 Turning AutoClose on and off        |ac_turnon|
+       3.4 Selection wrap prefix               |ac_wrapPrefix|
     4. Under the hood                          |ac_details|
        4.1 Mappings                            |ac_mappings|
 
@@ -89,6 +90,8 @@ would be:
 
         print(
 
+                                                            *ac_wrapSelection*
+
     4. Wrapping a selection in a pair: in visual mode extended mappings are
 provided: <Leader>a( etc for all opening characters, which wrap a selection in
 a corresponding opening/closing pair. 
@@ -117,6 +120,9 @@ a corresponding opening/closing pair.
         v          starts visual mode
         $          extends selection until the end of line
         \a(        causes selection to be wrapped in a pair of parentheses
+
+    Note the <Leader>a preifx is configurable (down to omitting altogether),
+see |ac_wrapPrefix|.
 
 ==============================================================================
                                                                    *ac_config*
@@ -221,6 +227,25 @@ want to do that task:
 
     And if you don't want to map anything, just use them on the command mode.
 
+                                  *ac_wrapPrefix* *AutoCloseSelectionWrapPrefix*
+
+3.4 Selection wrap prefix~
+
+    As described above (see |ac_wrapSelection|), when in visual mode, key
+combination <Leader>a followed by a configured open or close symbol causes the
+plugin to wrap visual selection in a corresponding symbol pair. The <Leader>a
+portion of the mapping can be overridden by setting g: or
+b:|AutoCloseSelectionWrapPrefix| variable. Some simple souls, such as the
+author of this variable, even set it to an empty string, so that to wrap
+selection it is enough to just type an opening or closing symbol when in
+visual mode. Examples:
+>
+    " oh, blasphemy!
+    let g:AutoCloseSelectionWrapPrefix=""
+
+    " hide the sacrilege from the gods of vim:
+    autocmd FileType vim let b:AutoCloseSelectionWrapPrefix="<Leader>a"
+<
 ==============================================================================
                                                                   *ac_details*
 4. Under the hood~

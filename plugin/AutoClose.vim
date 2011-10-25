@@ -335,7 +335,8 @@ function! s:DefineVariables()
                 \ 'AutoCloseProtectedRegions': ["Comment", "String", "Character"],
                 \ 'AutoCloseSmartQuote': 1,
                 \ 'AutoCloseOn': 1,
-                \ 'AutoClosePreservDotReg': 1
+                \ 'AutoClosePreservDotReg': 1,
+                \ 'AutoCloseSelectionWrapPrefix': '<LEADER>a',
                 \ }
 
     " Let the user define if he/she wants the plugin to do special actions when the
@@ -369,13 +370,18 @@ function! s:CreatePairsMaps()
         let quoted_opener = s:quoteAndEscape(opener)
         let quoted_closer = s:quoteAndEscape(closer)
 
-        exec "vnoremap <buffer> <silent> <LEADER>a" . opener . " <Esc>`>a" . closer .  "<Esc>`<i" . opener . "<Esc>"
-        exec "vnoremap <buffer> <silent> <LEADER>a" . closer . " <Esc>`>a" . closer .  "<Esc>`<i" . opener . "<Esc>"
+        exec "vnoremap <buffer> <silent> ". b:AutoCloseSelectionWrapPrefix 
+                    \ . opener . " <Esc>`>a" . closer .  "<Esc>`<i" . opener . "<Esc>"
+        exec "vnoremap <buffer> <silent> ". b:AutoCloseSelectionWrapPrefix 
+                    \ . closer . " <Esc>`>a" . closer .  "<Esc>`<i" . opener . "<Esc>"
         if key == b:AutoClosePairs[key]
-            exec "inoremap <buffer> <silent> " . opener . " <C-R>=<SID>OpenOrCloseTwinPair(" . quoted_opener . ")<CR>"
+            exec "inoremap <buffer> <silent> " . opener
+                        \ . " <C-R>=<SID>OpenOrCloseTwinPair(" . quoted_opener . ")<CR>"
         else
-            exec "inoremap <buffer> <silent> " . opener . " <C-R>=<SID>InsertPair(" . quoted_opener . ")<CR>"
-            exec "inoremap <buffer> <silent> " . closer . " <C-R>=<SID>ClosePair(" . quoted_closer . ")<CR>"
+            exec "inoremap <buffer> <silent> " . opener
+                        \ . " <C-R>=<SID>InsertPair(" . quoted_opener . ")<CR>"
+            exec "inoremap <buffer> <silent> " . closer
+                        \ . " <C-R>=<SID>ClosePair(" . quoted_closer . ")<CR>"
         endif
     endfor
 endfunction
