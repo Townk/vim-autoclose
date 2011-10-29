@@ -49,14 +49,11 @@ function! s:GetPrevChar()
 endfunction
 
 " used to implement automatic deletion of closing character when opening
-" counterpart is deleted
+" counterpart is deleted and by space expansion
 function! s:IsEmptyPair()
     let l:prev = s:GetPrevChar()
     let l:next = s:GetNextChar()
-    if l:prev == "\0" || l:next == "\0"
-        return 0
-    endif
-    return get(b:AutoClosePairs, l:prev, "\0") == l:next
+    return (l:next != "\0") && (get(b:AutoClosePairs, l:prev, "\0") == l:next)
 endfunction
 
 function! s:GetCurrentSyntaxRegion()
@@ -286,6 +283,14 @@ function! s:Space()
     endif
 endfunction
 
+function! s:Enter()
+    if b:AutoCloseOn && s:IsEmptyPair() && stridx( b:AutoCloseExpandEnterOn, s:GetPrevChar() ) >= 0
+        return "\<CR>\<Esc>O"
+    else
+        return "\<CR>"
+    endif
+endfunction
+
 function! s:ToggleAutoClose()
     let b:AutoCloseOn = !b:AutoCloseOn
     if b:AutoCloseOn
@@ -347,6 +352,7 @@ function! s:DefineVariables()
                 \ 'AutoClosePreservDotReg': 1,
                 \ 'AutoCloseSelectionWrapPrefix': '<LEADER>a',
                 \ 'AutoCloseExpandSpace': 1,
+                \ 'AutoCloseExpandEnterOn': "{",
                 \ }
 
     " Let the user define if he/she wants the plugin to do special actions when the
@@ -402,6 +408,9 @@ function! s:CreateExtraMaps()
     inoremap <buffer> <silent> <Del>        <C-R>=<SID>Delete()<CR>
     if b:AutoCloseExpandSpace
         inoremap <buffer> <silent> <Space>      <C-R>=<SID>Space()<CR>
+    endif
+    if len(b:AutoCloseExpandEnterOn) > 0
+        inoremap <buffer> <silent> <CR>      <C-R>=<SID>Enter()<CR>
     endif
 
     if b:AutoClosePreservDotReg == 1
