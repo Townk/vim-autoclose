@@ -8,10 +8,8 @@
 " Last modified: 02/02/2011
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-let s:debug = 1
-
 " check if script is already loaded
-if s:debug == 0 && exists("g:loaded_AutoClose")
+if !exists("g:debug_AutoClose") && exists("g:loaded_AutoClose")
     finish "stop loading the script"
 endif
 let g:loaded_AutoClose = 1
