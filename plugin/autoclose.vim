@@ -48,7 +48,7 @@ function! s:IsEmptyPair()
     if l:prev == "\0" || l:next == "\0"
         return 0
     endif
-    return (l:prev == l:next) || (get(b:AutoClosePairs, l:prev, "\0") == l:next)
+    return get(b:AutoClosePairs, l:prev, "\0") == l:next
 endfunction
 
 function! s:GetCurrentSyntaxRegion()
