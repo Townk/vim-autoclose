@@ -8,10 +8,8 @@
 " Last modified: 02/02/2011
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-let s:debug = 0
-
 " check if script is already loaded
-if s:debug == 0 && exists("g:loaded_AutoClose")
+if !exists("g:debug_AutoClose") && exists("g:loaded_AutoClose")
     finish "stop loading the script"
 endif
 let g:loaded_AutoClose = 1
@@ -56,7 +54,7 @@ function! s:IsEmptyPair()
     if l:prev == "\0" || l:next == "\0"
         return 0
     endif
-    return (l:prev == l:next) || (get(b:AutoClosePairs, l:prev, "\0") == l:next)
+    return get(b:AutoClosePairs, l:prev, "\0") == l:next
 endfunction
 
 function! s:GetCurrentSyntaxRegion()
