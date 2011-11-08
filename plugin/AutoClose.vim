@@ -406,6 +406,7 @@ function! s:CreateExtraMaps()
 endfunction
 
 function! s:CreateMaps()
+    silent doautocmd FileType
     call s:DefineVariables()
     call s:CreatePairsMaps()
     call s:CreateExtraMaps()
