@@ -8,7 +8,7 @@
 " Last modified: 02/02/2011
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-let s:debug = 1
+let s:debug = 0
 
 " check if script is already loaded
 if s:debug == 0 && exists("g:loaded_AutoClose")
@@ -18,6 +18,12 @@ let g:loaded_AutoClose = 1
 
 let s:global_cpo = &cpo " store compatible-mode in local variable
 set cpo&vim             " go into nocompatible-mode
+
+" Determine if special handling is required for xterm/screen/vt100
+" movement keys.
+let s:needspecialkeyhandling = &term[:4] == "xterm"
+      \ || &term[:5] == "screen" || &term[:4] == "linux"
+      \ || &term[:3] == "rxvt" || &term[:4] == "urxvt"
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Functions
@@ -97,7 +103,7 @@ function! s:AllowQuote(char, isBS)
         endif
     endif
     return l:result
-endfunction 
+endfunction
 
 function! s:CountQuotes(char)
     let l:currPos = col('.')-1
@@ -138,8 +144,8 @@ endfunction
 
 function! s:PopBuffer()
     if exists("b:AutoCloseBuffer") && len(b:AutoCloseBuffer) > 0
-	   call remove(b:AutoCloseBuffer, 0)
-	endif
+        call remove(b:AutoCloseBuffer, 0)
+    endif
 endfunction
 
 function! s:EmptyBuffer()
@@ -158,7 +164,7 @@ function! s:FlushBuffer()
             call s:EraseCharsOnLine(l:len)
         endif
     endif
-	return l:result
+    return l:result
 endfunction
 
 function! s:InsertCharsOnLine(str)
@@ -181,15 +187,21 @@ function! s:EraseCharsOnLine(len)
     else
         call setline('.', l:line[:l:column] . l:line[l:column + a:len + 1:])
     endif
-endfunction 
+endfunction
 
 function! s:InsertPair(char)
+    if ! b:AutoCloseOn || ! has_key(b:AutoClosePairs, a:char) || s:IsForbidden(a:char)
+      return a:char
+    endif
+
     let l:save_ve = &ve
     set ve=all
 
     let l:next = s:GetNextChar()
     let l:result = a:char
-    if b:AutoCloseOn && !s:IsForbidden(a:char) && (l:next == "\0" || l:next !~ '\w') && s:AllowQuote(a:char, 0)
+    " only add closing pair before space or any of the closepair chars
+    let close_before = '\s\|\V\[,.;' . escape(join(keys(b:AutoClosePairs) + values(b:AutoClosePairs), ''), ']').']'
+    if (l:next == "\0" || l:next =~ close_before) && s:AllowQuote(a:char, 0)
         call s:InsertCharsOnLine(b:AutoClosePairs[a:char])
         call s:PushBuffer(b:AutoClosePairs[a:char])
     endif
@@ -230,7 +242,7 @@ function! s:Delete()
 
     if exists("b:AutoCloseBuffer") && len(b:AutoCloseBuffer) > 0 && b:AutoCloseBuffer[0] == s:GetNextChar()
         call s:PopBuffer()
-    endif    
+    endif
 
     exec "set ve=" . l:save_ve
     return "\<Del>"
@@ -245,7 +257,7 @@ function! s:Backspace()
     if b:AutoCloseOn && s:IsEmptyPair() && (l:prev != l:next || s:AllowQuote(l:prev, 1))
         call s:EraseCharsOnLine(1)
         call s:PopBuffer()
-    endif    
+    endif
 
     exec "set ve=" . l:save_ve
     return "\<BS>"
@@ -260,114 +272,59 @@ function! s:ToggleAutoClose()
     endif
 endfunction
 
-function! s:DefineVariables()
-    " all the following variable can be set per buffer or global. If both are set
-    " the buffer variable has priority.
+" Define variables (in the buffer namespace).
+" If reset is true, the variables get reset. This is used on FileType changes.
+function! s:DefineVariables(reset)
+    " All the following variables can be set per buffer or global.
+    " The buffer namespace is used internally, and gets reset on FileType
+    " events.
+    let defaults = {
+                \ 'AutoClosePairs': {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'",
+                \                    '<': '>', '`': '`', '«': '»'},
+                \ 'AutoCloseQuotes': [],
+                \ 'AutoCloseProtectedRegions': ["Comment", "String", "Character"],
+                \ 'AutoCloseSmartQuote': 1,
+                \ 'AutoCloseOn': 1,
+                \ 'AutoClosePreservDotReg': 1
+                \ }
 
-    " let user define which character he/she wants to autocomplete
-    if !exists("b:AutoClosePairs") || type(b:AutoClosePairs) != type({})
-        if exists("g:AutoClosePairs") && type(g:AutoClosePairs) == type({})
-            let b:AutoClosePairs = g:AutoClosePairs
-        else
-            let b:AutoClosePairs = {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'"}
-        endif
+    let filetypes = split(&ft, '\.')
+    if index(filetypes, 'ruby') != -1
+      let defaults['AutoClosePairs']['|'] = '|'
     endif
-    "
-    " let user define explicit which chars should be consider quotes
-    if !exists("b:AutoCloseQuotes") || type(b:AutoCloseQuotes) != type([])
-        if exists("g:AutoCloseQuotes") && type(g:AutoCloseQuotes) == type([])
-            let b:AutoCloseQuotes = g:AutoCloseQuotes
-        else
-            let b:AutoCloseQuotes = []
-        endif
-    endif
-
-    " let user define in which regions the autocomplete feature should not occur
-    if !exists("b:AutoCloseProtectedRegions") || type(b:AutoCloseProtectedRegions) != type([])
-        if exists("g:AutoCloseProtectedRegions") && type(g:AutoCloseProtectedRegions) == type([])
-            let b:AutoCloseProtectedRegions = g:AutoCloseProtectedRegions
-        else
-            let b:AutoCloseProtectedRegions = ["Comment", "String", "Character"]
-        endif
+    if index(filetypes, 'typoscript') != -1 || index(filetypes, 'zsh') != -1 || index(filetypes, 'sh') != -1
+      unlet defaults['AutoClosePairs']['<']
     endif
 
-    " let user define if he/she wants the plugin to do quotes on a smart way
-    if !exists("b:AutoCloseSmartQuote") || type(b:AutoCloseSmartQuote) != type(0)
-        if exists("g:AutoCloseSmartQuote") && type(g:AutoCloseSmartQuote) == type(0)
-            let b:AutoCloseSmartQuote = g:AutoCloseSmartQuote
-        else
-            let b:AutoCloseSmartQuote = 1
-        endif
-    endif
+    " Let the user define if he/she wants the plugin to do special actions when the
+    " popup menu is visible and a movement key is pressed.
+    " Movement keys used in the menu get mapped to themselves
+    " (Up/Down/PageUp/PageDown).
+    for key in s:movementKeys
+        let defaults['AutoClosePumvisible'.key] = ''
+    endfor
+    for key in s:pumMovementKeys
+        let defaults['AutoClosePumvisible'.key] = '<'.key.'>'
+    endfor
 
-    " let user define if he/she wants the plugin turned on when vim start. Defaul is YES
-    if !exists("b:AutoCloseOn") || type(b:AutoCloseOn) != type(0)
-        if exists("g:AutoCloseOn") && type(g:AutoCloseOn) == type(0)
-            let b:AutoCloseOn = g:AutoCloseOn
-        else
-            let b:AutoCloseOn = 1
+    " Now handle/assign values
+    for key in keys(defaults)
+        if exists('l:var') | unlet l:var | endif
+        if ! a:reset && exists('b:'.key)
+            exec 'let l:var = b:' . key
+            if type(l:var) == type(defaults[key])
+                continue
+            endif
         endif
-    endif
-
-    " let user define if he/she wants the plugin preserv the completion chars into the ". register
-    if !exists("b:AutoClosePreservDotReg") || type(b:AutoClosePreservDotReg) != type(0)
-        if exists("g:AutoClosePreservDotReg") && type(g:AutoClosePreservDotReg) == type(0)
-            let b:AutoClosePreservDotReg = g:AutoClosePreservDotReg
+        if exists('g:' . key)
+            exec 'let l:var = g:' . key
+            if type(l:var) == type(defaults[key])
+                exec 'let b:' . key . ' = g:' . key
+            endif
         else
-            let b:AutoClosePreservDotReg = 1
+            exec 'let b:' . key . ' = ' . string(defaults[key])
         endif
-    endif
-
-    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
-    " the <Esc> key is pressed
-    if !exists("b:AutoClosePumvisibleEsc") || type(b:AutoClosePumvisibleEsc) != type("")
-        if exists("g:AutoClosePumvisibleEsc") && type(g:AutoClosePumvisibleEsc) == type("")
-            let b:AutoClosePumvisibleEsc = g:AutoClosePumvisibleEsc
-        else
-            let b:AutoClosePumvisibleEsc = ""
-        endif
-    endif
-
-    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
-    " the <Left> key is pressed
-    if !exists("b:AutoClosePumvisibleLeft") || type(b:AutoClosePumvisibleLeft) != type("")
-        if exists("g:AutoClosePumvisibleLeft") && type(g:AutoClosePumvisibleLeft) == type("")
-            let b:AutoClosePumvisibleLeft = g:AutoClosePumvisibleLeft
-        else
-            let b:AutoClosePumvisibleLeft = ""
-        endif
-    endif
-
-    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
-    " the <Right> key is pressed
-    if !exists("b:AutoClosePumvisibleRight") || type(b:AutoClosePumvisibleRight) != type("")
-        if exists("g:AutoClosePumvisibleRight") && type(g:AutoClosePumvisibleRight) == type("")
-            let b:AutoClosePumvisibleRight = g:AutoClosePumvisibleRight
-        else
-            let b:AutoClosePumvisibleRight = ""
-        endif
-    endif
-
-    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
-    " the <Up> key is pressed
-    if !exists("b:AutoClosePumvisibleUp") || type(b:AutoClosePumvisibleUp) != type("")
-        if exists("g:AutoClosePumvisibleUp") && type(g:AutoClosePumvisibleUp) == type("")
-            let b:AutoClosePumvisibleUp = g:AutoClosePumvisibleUp
-        else
-            let b:AutoClosePumvisibleUp = ""
-        endif
-    endif
-
-    " let user define if he/she wants the plugin to do special action when popup menu is visible and 
-    " the <Down> key is pressed
-    if !exists("b:AutoClosePumvisibleDown") || type(b:AutoClosePumvisibleDown) != type("")
-        if exists("g:AutoClosePumvisibleDown") && type(g:AutoClosePumvisibleDown) == type("")
-            let b:AutoClosePumvisibleDown = g:AutoClosePumvisibleDown
-        else
-            let b:AutoClosePumvisibleDown = ""
-        endif
-    endif
-
+    endfor
 endfunction
 
 function! s:CreatePairsMaps()
@@ -392,6 +349,7 @@ function! s:CreatePairsMaps()
             exec "inoremap <buffer> <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
         endif
     endfor
+
 endfunction
 
 function! s:CreateExtraMaps()
@@ -400,37 +358,18 @@ function! s:CreateExtraMaps()
     inoremap <buffer> <silent> <Del>        <C-R>=<SID>Delete()<CR>
 
     if b:AutoClosePreservDotReg == 1
-        " Fix the re-do feature:
-        if !empty(b:AutoClosePumvisibleEsc)
-            exec "inoremap <buffer> <silent> <expr>  <Esc>  pumvisible() ? \"\\" . b:AutoClosePumvisibleEsc . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Esc>\""
-        else
-            inoremap <buffer> <silent> <Esc>   <C-R>=<SID>FlushBuffer()<CR><Esc>
-        endif
-
-        " Flush the char buffer on key movements:
-        if !empty(b:AutoClosePumvisibleLeft)
-            exec "inoremap <buffer> <silent> <expr>  <Left>  pumvisible() ? \"\\" . b:AutoClosePumvisibleLeft . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Left>\""
-        else
-            inoremap <buffer> <silent> <Left>  <C-R>=<SID>FlushBuffer()<CR><Left>
-        endif
-        
-        if !empty(b:AutoClosePumvisibleRight)
-            exec "inoremap <buffer> <silent> <expr>  <Right>  pumvisible() ? \"\\" . b:AutoClosePumvisibleRight . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Right>\""
-        else
-            inoremap <buffer> <silent> <Right> <C-R>=<SID>FlushBuffer()<CR><Right>
-        endif
-
-        if !empty(b:AutoClosePumvisibleDown)
-            exec "inoremap <buffer> <silent> <expr>  <Down>  pumvisible() ? \"\\" . b:AutoClosePumvisibleDown . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Down>\""
-        else
-            inoremap <buffer> <silent> <Down>  <C-R>=<SID>FlushBuffer()<CR><Down>
-        endif
-
-        if !empty(b:AutoClosePumvisibleUp)
-            exec "inoremap <buffer> <silent> <expr>  <Up>  pumvisible() ? \"\\" . b:AutoClosePumvisibleUp . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<Up>\""
-        else
-            inoremap <buffer> <silent> <Up>    <C-R>=<SID>FlushBuffer()<CR><Up>
-        endif
+        " Fix the re-do feature by flushing the char buffer on key movements (including Escape):
+        for key in s:movementKeys
+            if s:needspecialkeyhandling
+                exec 'imap <buffer> <silent>' . s:movementKeysXterm[key] . ' <'.key.'>'
+            endif
+            exe 'let l:pvisiblemap = b:AutoClosePumvisible' . key
+            if len(l:pvisiblemap)
+              exec "inoremap <buffer> <silent> <expr>  <" . key . ">  pumvisible() ? \"" . l:pvisiblemap . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<" . key . ">\""
+            else
+              exec "inoremap <buffer> <silent> <" . key . ">  <C-R>=<SID>FlushBuffer()<CR><" . key . ">"
+            endif
+        endfor
 
         " Flush the char buffer on mouse click:
         inoremap <buffer> <silent> <LeftMouse>  <C-R>=<SID>FlushBuffer()<CR><LeftMouse>
@@ -438,8 +377,8 @@ function! s:CreateExtraMaps()
     endif
 endfunction
 
-function! s:CreateMaps()
-    call s:DefineVariables()
+function! s:CreateMaps(reset)
+    call s:DefineVariables(a:reset)
     call s:CreatePairsMaps()
     call s:CreateExtraMaps()
 
@@ -457,10 +396,20 @@ endfunction
 let s:mapRemap = {'|': '<Bar>', ' ': '<Space>'}
 let s:argRemap = {'"': '\"'}
 
-autocmd FileType * call <SID>CreateMaps()
-autocmd BufNewFile,BufRead,BufEnter * if !<SID>IsLoadedOnBuffer() | call <SID>CreateMaps() | endif
+let s:movementKeys = ['Esc', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown']
+let s:pumMovementKeys = ['Up', 'Down', 'PageUp', 'PageDown'] " list of keys that get mapped to themselves for pumvisible()
+if s:needspecialkeyhandling
+  " map s:movementKeys to xterm equivalent
+  let s:movementKeysXterm = {'Esc': '<C-[>', 'Up': '<C-[>OA', 'Down': '<C-[>OB', 'Left': '<C-[>OD', 'Right': '<C-[>OC', 'Home': '<C-[>OH', 'End': '<C-[>OF', 'PageUp': '<C-[>[5~', 'PageDown': '<C-[>[6~'}
+endif
+
+augroup <Plug>(autoclose)
+au!
+autocmd FileType * call <SID>CreateMaps(1)
+autocmd BufNewFile,BufRead,BufEnter * if !<SID>IsLoadedOnBuffer() | call <SID>CreateMaps(0) | endif
 autocmd InsertEnter * call <SID>EmptyBuffer()
 autocmd BufEnter * if mode() == 'i' | call <SID>EmptyBuffer() | endif
+augroup END
 
 " Define convenient commands
 command! AutoCloseOn :let b:AutoCloseOn = 1
