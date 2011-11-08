@@ -48,6 +48,8 @@ function! s:GetPrevChar()
     return s:GetCharBehind(1)
 endfunction
 
+" used to implement automatic delection of closing character when opening
+" counterpart is deleted
 function! s:IsEmptyPair()
     let l:prev = s:GetPrevChar()
     let l:next = s:GetNextChar()
@@ -109,7 +111,10 @@ function! s:CountQuotes(char)
     let l:result = 0
 
     if l:currPos >= 0
-        for q in b:AutoCloseQuotes
+        for [q,closer] in items(b:AutoClosePairs)
+            " only consider twin pairs
+            if q != closer | continue | endif
+
             if b:AutoCloseSmartQuote != 0
                 let l:regex = q . '[ˆ\\' . q . ']*(\\.[ˆ\\' . q . ']*)*' . q
             else
@@ -133,6 +138,13 @@ function! s:CountQuotes(char)
     return l:result
 endfunction
 
+" The auto-close buffer is used in a fix of the redo functionality.
+" As we insert characters after cursor, we remember them and at the moment
+" that vim would normally collect the last entered string into dot register
+" (:help ".) - i.e. when esc or a motion key is typed in insert mode - we
+" erase the inserted symbols and pretend that we have just now typed them.
+" This way vim picks them up into dot register as well and user can repeat the
+" typed bit with . command.
 function! s:PushBuffer(char)
     if !exists("b:AutoCloseBuffer")
         let b:AutoCloseBuffer = []
@@ -159,13 +171,13 @@ function! s:FlushBuffer()
         if l:len > 0
             let l:result = join(b:AutoCloseBuffer, '') . repeat("\<Left>", l:len)
             let b:AutoCloseBuffer = []
-            call s:EraseCharsOnLine(l:len)
+            call s:EraseNCharsAtCursor(l:len)
         endif
     endif
     return l:result
 endfunction
 
-function! s:InsertCharsOnLine(str)
+function! s:InsertStringAtCursor(str)
     let l:line = getline('.')
     let l:column = col('.')-2
 
@@ -176,7 +188,7 @@ function! s:InsertCharsOnLine(str)
     endif
 endfunction
 
-function! s:EraseCharsOnLine(len)
+function! s:EraseNCharsAtCursor(len)
     let l:line = getline('.')
     let l:column = col('.')-2
 
@@ -187,53 +199,54 @@ function! s:EraseCharsOnLine(len)
     endif
 endfunction
 
-function! s:InsertPair(char)
-    if ! b:AutoCloseOn || ! has_key(b:AutoClosePairs, a:char) || s:IsForbidden(a:char)
-      return a:char
+" returns the opener, after having inserted its closer if necessary
+function! s:InsertPair(opener)
+    if ! b:AutoCloseOn || ! has_key(b:AutoClosePairs, a:opener) || s:IsForbidden(a:opener)
+      return a:opener
     endif
 
     let l:save_ve = &ve
     set ve=all
 
     let l:next = s:GetNextChar()
-    let l:result = a:char
     " only add closing pair before space or any of the closepair chars
     let close_before = '\s\|\V\[,.;' . escape(join(keys(b:AutoClosePairs) + values(b:AutoClosePairs), ''), ']').']'
-    if (l:next == "\0" || l:next =~ close_before) && s:AllowQuote(a:char, 0)
-        call s:InsertCharsOnLine(b:AutoClosePairs[a:char])
-        call s:PushBuffer(b:AutoClosePairs[a:char])
+    if (l:next == "\0" || l:next =~ close_before) && s:AllowQuote(a:opener, 0)
+        call s:InsertStringAtCursor(b:AutoClosePairs[a:opener])
+        call s:PushBuffer(b:AutoClosePairs[a:opener])
     endif
 
     exec "set ve=" . l:save_ve
-    return l:result
+    return a:opener
 endfunction
 
-function! s:ClosePair(char)
+" returns the closer, after having eaten identical one if necessary
+function! s:ClosePair(closer)
     let l:save_ve = &ve
     set ve=all
 
-    let l:result = a:char
-    if b:AutoCloseOn && s:GetNextChar() == a:char
-        call s:EraseCharsOnLine(1)
+    if b:AutoCloseOn && s:GetNextChar() == a:closer
+        call s:EraseNCharsAtCursor(1)
         call s:PopBuffer()
     endif
 
     exec "set ve=" . l:save_ve
-    return l:result
+    return a:closer
 endfunction
 
-function! s:CheckPair(char)
-    let l:occur = s:CountQuotes(a:char)
-
-    if l:occur == 0 || l:occur%2 == 0
-        " Opening char
+" in case closer is identical with its opener - heuristically decide which one
+" is being typed and act accordingly
+function! s:OpenOrCloseTwinPair(char)
+    if s:CountQuotes(a:char) % 2 == 0
+        " act as opening char
         return s:InsertPair(a:char)
     else
-        " Closing char
+        " act as closing char
         return s:ClosePair(a:char)
     endif
 endfunction
 
+" maintain auto-close buffer when delete key is pressed
 function! s:Delete()
     let l:save_ve = &ve
     set ve=all
@@ -246,6 +259,9 @@ function! s:Delete()
     return "\<Del>"
 endfunction
 
+" when backspace is pressed:
+" - erase an empty pair if backspacing from inside one
+" - maintain auto-close buffer
 function! s:Backspace()
     let l:save_ve = &ve
     let l:prev = s:GetPrevChar()
@@ -253,7 +269,7 @@ function! s:Backspace()
     set ve=all
 
     if b:AutoCloseOn && s:IsEmptyPair() && (l:prev != l:next || s:AllowQuote(l:prev, 1))
-        call s:EraseCharsOnLine(1)
+        call s:EraseNCharsAtCursor(1)
         call s:PopBuffer()
     endif
 
@@ -270,29 +286,58 @@ function! s:ToggleAutoClose()
     endif
 endfunction
 
+" Parse a whitespace separated line of pairs
+" single characters are assumed to be twin pairs (closer identical to
+" opener)
+function! AutoClose#ParsePairs(string)
+    if type(a:string) == type({})
+        return a:string
+    elseif type(a:string) != type("")
+        echoerr "AutoClose#ParsePairs(): Argument not a dictionary or a string"
+        return {}
+    endif
+
+    let l:dict = {}
+    for pair in split(a:string)
+        " strlen is length in bytes, we want in (wide) characters
+        let l:pairLen = strlen(substitute(pair,'.','x','g'))
+        if l:pairLen == 1
+            " assume a twin pair
+            let l:dict[pair] = pair
+        elseif l:pairLen == 2
+            let l:dict[pair[0]] = pair[1]
+        else
+            echoerr "AutoClose: Bad pair string - a pair longer then two character"
+            echoerr " `- String: " . a:sring
+            echoerr " `- Pair: " . pair . " Pair len: " . l:pairLen
+        endif
+    endfor
+    return l:dict
+endfunction
+
+" this function is made visible for the sake of users
+function! AutoClose#DefaultPairs()
+    return AutoClose#ParsePairs("() {} [] <> «» ` \" '")
+endfunction
+
+function! AutoClose#DefaultPairsModified(pairsToAdd,openersToRemove)
+    return filter(
+                \ extend(AutoClose#DefaultPairs(), AutoClose#ParsePairs(a:pairsToAdd), "force"),
+                \ "stridx(a:openersToRemove,v:key)<0")
+endfunction
+
 " Define variables (in the buffer namespace).
-" If reset is true, the variables get reset. This is used on FileType changes.
-function! s:DefineVariables(reset)
+function! s:DefineVariables()
     " All the following variables can be set per buffer or global.
-    " The buffer namespace is used internally, and gets reset on FileType
-    " events.
+    " The buffer namespace is used internally
     let defaults = {
-                \ 'AutoClosePairs': {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'",
-                \                    '<': '>', '`': '`', '«': '»'},
-                \ 'AutoCloseQuotes': [],
+                \ 'AutoClosePairs': AutoClose#DefaultPairs(),
                 \ 'AutoCloseProtectedRegions': ["Comment", "String", "Character"],
                 \ 'AutoCloseSmartQuote': 1,
                 \ 'AutoCloseOn': 1,
-                \ 'AutoClosePreservDotReg': 1
+                \ 'AutoClosePreservDotReg': 1,
+                \ 'AutoCloseSelectionWrapPrefix': '<LEADER>a',
                 \ }
-
-    let filetypes = split(&ft, '\.')
-    if index(filetypes, 'ruby') != -1
-      let defaults['AutoClosePairs']['|'] = '|'
-    endif
-    if index(filetypes, 'typoscript') != -1 || index(filetypes, 'zsh') != -1 || index(filetypes, 'sh') != -1
-      unlet defaults['AutoClosePairs']['<']
-    endif
 
     " Let the user define if he/she wants the plugin to do special actions when the
     " popup menu is visible and a movement key is pressed.
@@ -307,18 +352,10 @@ function! s:DefineVariables(reset)
 
     " Now handle/assign values
     for key in keys(defaults)
-        if exists('l:var') | unlet l:var | endif
-        if ! a:reset && exists('b:'.key)
-            exec 'let l:var = b:' . key
-            if type(l:var) == type(defaults[key])
-                continue
-            endif
-        endif
-        if exists('g:' . key)
-            exec 'let l:var = g:' . key
-            if type(l:var) == type(defaults[key])
-                exec 'let b:' . key . ' = g:' . key
-            endif
+        if exists('b:'.key) && type(eval('b:'.key)) == type(defaults[key])
+            continue
+        elseif exists('g:'.key) && type(eval('g:'.key)) == type(defaults[key])
+            exec 'let b:' . key . ' = g:' . key
         else
             exec 'let b:' . key . ' = ' . string(defaults[key])
         endif
@@ -326,28 +363,27 @@ function! s:DefineVariables(reset)
 endfunction
 
 function! s:CreatePairsMaps()
-    let l:appendQuote = (len(b:AutoCloseQuotes) == 0)
     " create appropriate maps to defined open/close characters
     for key in keys(b:AutoClosePairs)
-        let map_open = ( has_key(s:mapRemap, key) ? s:mapRemap[key] : key )
-        let map_close = ( has_key(s:mapRemap, b:AutoClosePairs[key]) ? s:mapRemap[b:AutoClosePairs[key]] : b:AutoClosePairs[key] )
+        let opener = s:keyName(key)
+        let closer = s:keyName(b:AutoClosePairs[key])
+        let quoted_opener = s:quoteAndEscape(opener)
+        let quoted_closer = s:quoteAndEscape(closer)
 
-        let open_func_arg = ( has_key(s:argRemap, map_open) ? '"' . s:argRemap[map_open] . '"' : '"' . map_open . '"' )
-        let close_func_arg = ( has_key(s:argRemap, map_close) ? '"' . s:argRemap[map_close] . '"' : '"' . map_close . '"' )
-
-        exec "vnoremap <buffer> <silent> <LEADER>a" . map_open . " <Esc>`>a" . map_close .  "<Esc>`<i" . map_open . "<Esc>"
-        exec "vnoremap <buffer> <silent> <LEADER>a" . map_close . " <Esc>`>a" . map_close .  "<Esc>`<i" . map_open . "<Esc>"
+        exec "vnoremap <buffer> <silent> ". b:AutoCloseSelectionWrapPrefix 
+                    \ . opener . " <Esc>`>a" . closer .  "<Esc>`<i" . opener . "<Esc>"
+        exec "vnoremap <buffer> <silent> ". b:AutoCloseSelectionWrapPrefix 
+                    \ . closer . " <Esc>`>a" . closer .  "<Esc>`<i" . opener . "<Esc>"
         if key == b:AutoClosePairs[key]
-            if l:appendQuote
-                call add(b:AutoCloseQuotes, key)
-            endif
-            exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>CheckPair(" . open_func_arg . ")<CR>"
+            exec "inoremap <buffer> <silent> " . opener
+                        \ . " <C-R>=<SID>OpenOrCloseTwinPair(" . quoted_opener . ")<CR>"
         else
-            exec "inoremap <buffer> <silent> " . map_open . " <C-R>=<SID>InsertPair(" . open_func_arg . ")<CR>"
-            exec "inoremap <buffer> <silent> " . map_close . " <C-R>=<SID>ClosePair(" . close_func_arg . ")<CR>"
+            exec "inoremap <buffer> <silent> " . opener
+                        \ . " <C-R>=<SID>InsertPair(" . quoted_opener . ")<CR>"
+            exec "inoremap <buffer> <silent> " . closer
+                        \ . " <C-R>=<SID>ClosePair(" . quoted_closer . ")<CR>"
         endif
     endfor
-
 endfunction
 
 function! s:CreateExtraMaps()
@@ -363,7 +399,7 @@ function! s:CreateExtraMaps()
             endif
             exe 'let l:pvisiblemap = b:AutoClosePumvisible' . key
             if len(l:pvisiblemap)
-              exec "inoremap <buffer> <silent> <expr>  <" . key . ">  pumvisible() ? \"" . l:pvisiblemap . "\" : \"\\<C-R>=<SID>FlushBuffer()\\<CR>\\<" . key . ">\""
+              exec "inoremap <buffer> <silent> <expr>  <" . key . ">  pumvisible() ? '" . l:pvisiblemap . "' : '<C-R>=<SID>FlushBuffer()<CR><" . key . ">'"
             else
               exec "inoremap <buffer> <silent> <" . key . ">  <C-R>=<SID>FlushBuffer()<CR><" . key . ">"
             endif
@@ -375,8 +411,9 @@ function! s:CreateExtraMaps()
     endif
 endfunction
 
-function! s:CreateMaps(reset)
-    call s:DefineVariables(a:reset)
+function! s:CreateMaps()
+    silent doautocmd FileType
+    call s:DefineVariables()
     call s:CreatePairsMaps()
     call s:CreateExtraMaps()
 
@@ -387,15 +424,25 @@ function! s:IsLoadedOnBuffer()
     return (exists("b:loaded_AutoClose") && b:loaded_AutoClose)
 endfunction
 
+" map some characters to their key names
+function! s:keyName(char)
+    let s:keyNames = {'|': '<Bar>', ' ': '<Space>'}
+    return get(s:keyNames,a:char,a:char)
+endfunction
+
+" escape some characters for use in strings
+function! s:quoteAndEscape(char)
+    let s:escapedChars = {'"': '\"'}
+    return '"' . get(s:escapedChars,a:char,a:char) . '"'
+endfunction
+
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Configuration
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" here is a dictionary of characters that need to be converted before being used as map
-let s:mapRemap = {'|': '<Bar>', ' ': '<Space>'}
-let s:argRemap = {'"': '\"'}
 
-let s:movementKeys = ['Esc', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown']
-let s:pumMovementKeys = ['Up', 'Down', 'PageUp', 'PageDown'] " list of keys that get mapped to themselves for pumvisible()
+let s:movementKeys = split('Esc Up Down Left Right Home End PageUp PageDown')
+" list of keys that get mapped to themselves for pumvisible()
+let s:pumMovementKeys = split('Up Down PageUp PageDown')
 if s:needspecialkeyhandling
   " map s:movementKeys to xterm equivalent
   let s:movementKeysXterm = {'Esc': '<C-[>', 'Up': '<C-[>OA', 'Down': '<C-[>OB', 'Left': '<C-[>OD', 'Right': '<C-[>OC', 'Home': '<C-[>OH', 'End': '<C-[>OF', 'PageUp': '<C-[>[5~', 'PageDown': '<C-[>[6~'}
@@ -403,13 +450,17 @@ endif
 
 augroup <Plug>(autoclose)
 au!
-autocmd FileType * call <SID>CreateMaps(1)
-autocmd BufNewFile,BufRead,BufEnter * if !<SID>IsLoadedOnBuffer() | call <SID>CreateMaps(0) | endif
+autocmd BufNewFile,BufRead,BufEnter * if !<SID>IsLoadedOnBuffer() | call <SID>CreateMaps() | endif
 autocmd InsertEnter * call <SID>EmptyBuffer()
 autocmd BufEnter * if mode() == 'i' | call <SID>EmptyBuffer() | endif
+autocmd FileType ruby
+            \ let b:AutoClosePairs = AutoClose#DefaultPairsModified("|", "")
+autocmd FileType typoscript,zsh,sh
+            \ let b:AutoClosePairs = AutoClose#DefaultPairsModified("", "<")
 augroup END
 
 " Define convenient commands
 command! AutoCloseOn :let b:AutoCloseOn = 1
 command! AutoCloseOff :let b:AutoCloseOn = 0
 command! AutoCloseToggle :call s:ToggleAutoClose()
+" vim:sw=4:sts=4:

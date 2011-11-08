@@ -1,0 +1,290 @@
+*AutoClose.txt* Documentation for script AutoClose.vim
+
+    Script : AutoClose.vim
+    Author : Thiago Alves
+    Email  : <thiago.salves@gmail.com>
+    Changed: 25 October 2011
+
+==============================================================================
+                                                                    *ac_intro*
+1. Overview~
+
+    This  plugin was  born  as a  personal  need to  get  some little  special
+features from other editors into my  preferred one. The Eclipse IDE editor has
+an  auto-complete for  open-close pair  of  characters feature  that I  always
+wanted into Vim.
+
+    As  soon as  you type  a character  that could  have a  matching (closing)
+counterpart,  Eclipse automatically  puts  its counterpart  in  front of  your
+cursor, and it is smart enough  to ignore the closing character afterwards, if
+typed, but just moves your cursor one character forward.
+
+    But  the Eclipse  editor  does not  stop  there. If  you  type an  opening
+character on any part of your code  that should not have a pair completion, it
+will not insert the closing character for you.
+
+    The AutoClose plugin is an attempt to reproduce this behavior for Vim.
+
+    The following is covered in this document:
+
+    1. Overview                                |ac_intro|
+    2. Features                                |ac_features|
+    3. Configuring                             |ac_config|
+       3.1 Defining characters to auto close   |ac_charstoclose|
+       3.2 Defining protected regions          |ac_protectedregions|
+       3.3 Turning AutoClose on and off        |ac_turnon|
+       3.4 Selection wrap prefix               |ac_wrapPrefix|
+    4. Under the hood                          |ac_details|
+       4.1 Mappings                            |ac_mappings|
+
+==============================================================================
+                                                                *ac_operation*
+2. Features~
+
+    Plugin provides the following features:
+
+    1. Auto-closing: when opening symbol is typed (e.g. an opening
+parenthesis) corresponding closing simbol is inserted after the cursor.
+
+    You type:
+
+        sin(123*(Pi*2
+
+    Result:
+
+        sin(123*(Pi*2))
+
+    2. Typing over the closing characters: when cursor is immediatelly before
+a closing character and a closing character is typed, no new character is
+inserted. This is often handier than moving past closing symbols with cursor
+keys. 
+
+    You type:
+
+        sin(Pi*2.0+theta)*A
+
+    Result:
+
+        sin(Pi*2.0+theta)*A
+
+    This might seem pointless, but in fact gives more freedom to the user.
+While auto-closing is a big help when typing complex expressions (or simpler
+expressions in a lisp dialect), it shouldn't get in the way of typing a simple
+one.
+
+    3. Erasing empty pairs at once: when <BackSpace> is typed inside an empty
+pair, the closing symbol is erased together with the opening one.
+
+    Situation before pressing <BackSpace>:
+
+        print(|)
+
+    Here bar symbol represents cursor position. After pressing <BackSpace>:
+
+        print
+
+    On the other hand, <Delete> in the middle of an empty pair only erases a
+closing symbol and provides a way to cancel the effect of auto-closing when
+undesired. Thus, if in the same situation you'd pressed <Delete>, the result
+would be:
+
+        print(
+
+                                                            *ac_wrapSelection*
+
+    4. Wrapping a selection in a pair: in visual mode extended mappings are
+provided: <Leader>a( etc for all opening characters, which wrap a selection in
+a corresponding opening/closing pair. 
+
+    Situation:
+
+        print "Some text"
+
+    Position cursor in normal mode (shown as underscore below) on the space:
+
+        print_"Some text"
+
+    Assuming your <Leader> symbol is a backslash (see |<Leader>|):
+
+    You type:
+
+        <Delete>v$\a(
+
+    Result:
+
+        print("Some text")
+
+    Explanation:
+
+        <Delete>   removes the space which isn't necessary after wrapping
+        v          starts visual mode
+        $          extends selection until the end of line
+        \a(        causes selection to be wrapped in a pair of parentheses
+
+    Note the <Leader>a preifx is configurable (down to omitting altogether),
+see |ac_wrapPrefix|.
+
+==============================================================================
+                                                                   *ac_config*
+3. Configuring~
+
+    It is possible to personalize the AutoClose plugin in two ways:
+
+    1. Setting which character will have which pair to close
+    2. Defining regions where the auto close will not happen
+
+    Both settings are made by defining a special variable for each case.
+Setting can be overridden either globally or on a per-buffer basis, by setting
+g: or b: version of a variable. The latter is especially useful in a
+combination with |FileType| |autocommand|s. 
+
+                                            *ac_charstoclose* *AutoClosePairs*
+3.1 Definning characters to auto close~
+
+    The default auto-close pair repertoire can be overridden by setting either
+g:AutoClosePairs or b:AutoClosePairs. 
+
+                                                     *AutoClose#ParsePairs()*
+
+    A utility function |AutoClose#ParsePairs()| is provided to make setting
+these variables easier. The function expects a string of space separated
+character pairs or single characters. Single characters are treated as twin
+pairs (where opening and closing symbols are identical). Examples:
+> 
+      " override the global default
+      let g:AutoClosePairs = AutoClose#ParsePairs("() [] {} <> «» ` \" '")
+
+      " override the defaults for a particular FileType
+      autocommand FileType lisp 
+              \ let b:AutoClosePairs = AutoClose#ParsePairs("\" ()")
+<
+    The default pair repertoire is equivalent to the call:
+>
+      AutoClose#ParsePairs("() [] {} <> «» ` \" '")a
+<
+                                                  *AutoClose#DefaultPairs()*
+
+    A copy of the default pair repertoir can be retreived using the funcion
+|AutoClose#DefaultPairs()|. The function returns a dictionary, mapping opening
+symbols to corresponding closing symbols.
+
+                                          *AutoClose#DefaultPairsModified()*
+
+    Often you would like to only slightly modify the default (add or remove
+pairs), for this case utility function |AutoClose#DefaultPairsModified()| is
+provided, with the following prototype:
+>
+      AutoClose#DefaultPairsModified(pairsToAdd, openersToRemove)
+<
+    The function returns a pair repertoire with pairs from the 'pairsToAdd'
+argument inserted and pairs corresponding to opener symbols from the
+'openersToRemove' argument removed. The actual default repertoire isn't
+modified.  The format of the 'pairsToAdd' argument is the same as expected by
+the |AutoClose#ParsePairs()| described above, the 'openersToRemove' is a
+simple string of characters treated as open symbols to remove from a copy of
+the default pairs dictionary. 
+    
+    Examples:
+>
+      " auto-close || pair in ruby files
+      autocmd FileType ruby 
+              \ let b:AutoClosePairs = AutoClose#DefaultPairsModified("|", "")
+
+      " don't auto-close <> pair in shell files
+      autocmd FileType typoscript,zsh,sh 
+              \ let b:AutoClosePairs = AutoClose#DefaultPairsModified("", "<")
+<
+
+    Note the above two autocommands are actually installed by the plugin.
+
+                                      *ac_protectedregions* *acProtectedRegions*
+3.2 Definning protected regions~
+
+    Auto-close behavior is disabled in certain syntax regions: "Comment",
+"String" and "Character". This feature is controlled by the setting
+AutoCloseProtectedRegions, which can be overridden globally (via
+g:AutoCloseProtectedRegions) or per buffer (via b:AutoCloseProtectedRegions).
+Both variables should be assigned a list of region names. Example:
+
+>
+    let g:AutoCloseProtectedRegions = ["Comment", "String", "Character"]
+    autocmd FileType exoticLanguage
+              \ let b:AutoCloseProtectedRegions = ["Dialog", "ThoughBubble"]
+<
+
+                                          *ac_turnon* *ac_turnoff* *ac_toggle*
+3.3 Turning AutoClose on and off~
+
+    As AutoClose change the buffer you are editing, sometimes you just want
+to turn this feature off for a while and than turn it on again.
+
+    AutoClose provide three  commands that can be mapped to  any key as you
+want to do that task:
+
+    1. AutoCloseOn
+    2. AutoCloseOff
+    3. AutoCloseToggle
+
+    And if you don't want to map anything, just use them on the command mode.
+
+                                  *ac_wrapPrefix* *AutoCloseSelectionWrapPrefix*
+
+3.4 Selection wrap prefix~
+
+    As described above (see |ac_wrapSelection|), when in visual mode, key
+combination <Leader>a followed by a configured open or close symbol causes the
+plugin to wrap visual selection in a corresponding symbol pair. The <Leader>a
+portion of the mapping can be overridden by setting g: or
+b:|AutoCloseSelectionWrapPrefix| variable. Some simple souls, such as the
+author of this variable, even set it to an empty string, so that to wrap
+selection it is enough to just type an opening or closing symbol when in
+visual mode. Examples:
+>
+    " oh, blasphemy!
+    let g:AutoCloseSelectionWrapPrefix=""
+
+    " hide the sacrilege from the gods of vim:
+    autocmd FileType vim let b:AutoCloseSelectionWrapPrefix="<Leader>a"
+<
+==============================================================================
+                                                                  *ac_details*
+4. Under the hood~
+
+    This section will describe what is involved on AutoClose plugin to make
+it work.  The intent of this section is  to let users know what this plugin is
+doing in case of any strange behavior on your system.
+
+    Before version 1.1,  AutoClose used to use mappings and autocommands,  but
+now only mapping of the pairs and the backspace is used.  This change simplify
+drastically the whole work of the plugin.
+
+                                                                 *ac_mappings*
+4.1 Mappings~
+
+    Every character that is defined to have a closing counterpart is mapped to
+one of three possible functions:
+
+    1. InsertPair
+    2. ClosePair
+    3. OpenOrCloseTwinPair
+
+    The first two functions are meant  to characters that it pair is different
+from it  self like (  and ).  Their behavior  depending on which  character is
+typed,  open or close  one.  If the open character is  typed than the
+InsertPair function check  if there is a  possibility to  automatically insert
+the close pair (e.g.  the cursor is not inside some  area that is not allow to
+have auto completion) and if  a  close  character  is  typed  than  ClosePair
+just check if the next character is the close one and if it can be skipped.
+
+    OpenOrCloseTwinPair is  a little bit trickier.  It  is used  to characters
+that has itself as the closing pair (e.g the " character). Its behavior will
+be the sum of InsertPair and ClosePair functions plus  the verification of the
+existance of an already typed char.
+    
+
+==============================================================================
+
+    If you have questions or suggestions, please send me an email.
+
+------------------------------------------------------------------------------
+ vim:tw=78:fo=tcq2:ai:isk=!-~,^*,^\|,^\":ts=8:ft=help:norl:
