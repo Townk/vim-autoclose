@@ -317,7 +317,7 @@ endfunction
 
 " this function is made visible for the sake of users
 function! AutoClose#DefaultPairs()
-    return AutoClose#ParsePairs("() {} [] <> `` \"\" ''")
+    return AutoClose#ParsePairs("() {} [] <> ` \" '")
 endfunction
 
 function! AutoClose#DefaultPairsModified(pairsToAdd,openersToRemove)
