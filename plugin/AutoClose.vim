@@ -48,7 +48,7 @@ function! s:GetPrevChar()
     return s:GetCharBehind(1)
 endfunction
 
-" used to implement automatic delection of closing character when opening
+" used to implement automatic deletion of closing character when opening
 " counterpart is deleted
 function! s:IsEmptyPair()
     let l:prev = s:GetPrevChar()
@@ -370,9 +370,9 @@ function! s:CreatePairsMaps()
         let quoted_opener = s:quoteAndEscape(opener)
         let quoted_closer = s:quoteAndEscape(closer)
 
-        exec "vnoremap <buffer> <silent> ". b:AutoCloseSelectionWrapPrefix 
+        exec "vnoremap <buffer> <silent> ". b:AutoCloseSelectionWrapPrefix
                     \ . opener . " <Esc>`>a" . closer .  "<Esc>`<i" . opener . "<Esc>"
-        exec "vnoremap <buffer> <silent> ". b:AutoCloseSelectionWrapPrefix 
+        exec "vnoremap <buffer> <silent> ". b:AutoCloseSelectionWrapPrefix
                     \ . closer . " <Esc>`>a" . closer .  "<Esc>`<i" . opener . "<Esc>"
         if key == b:AutoClosePairs[key]
             exec "inoremap <buffer> <silent> " . opener
