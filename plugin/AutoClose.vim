@@ -349,6 +349,7 @@ function! s:DefineVariables()
                 \ 'AutoCloseSmartQuote': 1,
                 \ 'AutoCloseOn': 1,
                 \ 'AutoCloseSelectionWrapPrefix': '<LEADER>a',
+                \ 'AutoClosePumvisible': {},
                 \ }
 
     " Let the user define if he/she wants the plugin to do special actions when the
@@ -356,10 +357,10 @@ function! s:DefineVariables()
     " Movement keys used in the menu get mapped to themselves
     " (Up/Down/PageUp/PageDown).
     for key in s:movementKeys
-        let defaults['AutoClosePumvisible'.key] = ''
+        let defaults['AutoClosePumvisible'][key] = ''
     endfor
     for key in s:pumMovementKeys
-        let defaults['AutoClosePumvisible'.key] = '<'.key.'>'
+        let defaults['AutoClosePumvisible'][key] = '<'.key.'>'
     endfor
 
     " Now handle/assign values
@@ -406,11 +407,14 @@ function! s:CreateExtraMaps()
     if g:AutoClosePreserveDotReg
         " Fix the re-do feature by flushing the char buffer on key movements (including Escape):
         for key in s:movementKeys
-            exe 'let l:pvisiblemap = b:AutoClosePumvisible' . key
+            let l:pvisiblemap = b:AutoClosePumvisible[key]
+            let key = "<".key.">"
+            let l:currentmap = maparg(key,"i")
+            if (l:currentmap=="")|let l:currentmap=key|endif
             if len(l:pvisiblemap)
-              exec "inoremap <buffer> <silent> <expr>  <" . key . ">  pumvisible() ? '" . l:pvisiblemap . "' : '<C-R>=<SID>FlushBuffer()<CR><" . key . ">'"
+              exec "inoremap <buffer> <silent> <expr> " . key . " pumvisible() ? '" . l:pvisiblemap . "' : '<C-R>=<SID>FlushBuffer()<CR>" . l:currentmap . "'"
             else
-              exec "inoremap <buffer> <silent> <" . key . ">  <C-R>=<SID>FlushBuffer()<CR><" . key . ">"
+              exec "inoremap <buffer> <silent> " . key . "  <C-R>=<SID>FlushBuffer()<CR>" . l:currentmap
             endif
         endfor
 
@@ -452,6 +456,12 @@ endfunction
 let s:movementKeys = split('Esc Up Down Left Right Home End PageUp PageDown')
 " list of keys that get mapped to themselves for pumvisible()
 let s:pumMovementKeys = split('Up Down PageUp PageDown')
+
+
+if has("gui_macvim")
+    call extend(s:movementKeys,
+                \ split("D-Left D-Right D-Up D-Down M-Left M-Right M-Up M-Down"))
+endif
 
 augroup <Plug>(autoclose)
 au!
