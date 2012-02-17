@@ -317,13 +317,17 @@ endfunction
 
 " this function is made visible for the sake of users
 function! AutoClose#DefaultPairs()
-    return AutoClose#ParsePairs("() {} [] <> ` \" '")
+    return AutoClose#ParsePairs(g:AutoClosePairs)
+endfunction
+
+function! s:ModifyPairsList(list, pairsToAdd, openersToRemove)
+    return filter(
+                \ extend(a:list, AutoClose#ParsePairs(a:pairsToAdd), "force"),
+                \ "stridx(a:openersToRemove,v:key)<0")
 endfunction
 
 function! AutoClose#DefaultPairsModified(pairsToAdd,openersToRemove)
-    return filter(
-                \ extend(AutoClose#DefaultPairs(), AutoClose#ParsePairs(a:pairsToAdd), "force"),
-                \ "stridx(a:openersToRemove,v:key)<0")
+    return s:ModifyPairsList(AutoClose#DefaultPairs(), a:pairsToAdd, a:openersToRemove)
 endfunction
 
 " Define variables (in the buffer namespace).
@@ -349,6 +353,12 @@ function! s:DefineVariables()
     for key in s:pumMovementKeys
         let defaults['AutoClosePumvisible'.key] = '<'.key.'>'
     endfor
+
+    if exists ('b:AutoClosePairs') && type('b:AutoClosePairs') == type("")
+        let tmp = AutoClose#ParsePairs(b:AutoClosePairs)
+        unlet b:AutoClosePairs
+        let b:AutoClosePairs = tmp
+    endif
 
     " Now handle/assign values
     for key in keys(defaults)
@@ -440,6 +450,16 @@ endfunction
 " Configuration
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
+let s:AutoClosePairs_FactoryDefaults = AutoClose#ParsePairs("() {} [] ` \" '")
+if !exists("g:AutoClosePairs_add") | let g:AutoClosePairs_add = "" | endif
+if !exists("g:AutoClosePairs_del") | let g:AutoClosePairs_del = "" | endif
+if !exists("g:AutoClosePairs")
+    let g:AutoClosePairs = s:ModifyPairsList(
+                \ s:AutoClosePairs_FactoryDefaults,
+                \ g:AutoCloseDefaultPairs_add,
+                \ g:AutoCloseDefaultPairs_del )
+endif
+
 let s:movementKeys = split('Esc Up Down Left Right Home End PageUp PageDown')
 " list of keys that get mapped to themselves for pumvisible()
 let s:pumMovementKeys = split('Up Down PageUp PageDown')
@@ -453,10 +473,6 @@ au!
 autocmd BufNewFile,BufRead,BufEnter * if !<SID>IsLoadedOnBuffer() | call <SID>CreateMaps() | endif
 autocmd InsertEnter * call <SID>EmptyBuffer()
 autocmd BufEnter * if mode() == 'i' | call <SID>EmptyBuffer() | endif
-autocmd FileType ruby
-            \ let b:AutoClosePairs = AutoClose#DefaultPairsModified("|", "")
-autocmd FileType typoscript,zsh,sh
-            \ let b:AutoClosePairs = AutoClose#DefaultPairsModified("", "<")
 augroup END
 
 " Define convenient commands

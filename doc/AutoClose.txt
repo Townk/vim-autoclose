@@ -142,7 +142,40 @@ combination with |FileType| |autocommand|s.
 3.1 Defining characters to auto close~
 
     The default auto-close pair repertoire can be overridden by setting either
-g:AutoClosePairs or b:AutoClosePairs.
+|g:AutoClosePairs| or |b:AutoClosePairs|, which should contain a string of
+space separated pairs of open / close characters. In case of twin pairs (the
+same character used as opener and closer) it doesn't have to be repeated:
+
+>
+      let g:AutoClosePairs = "() {} \""
+<
+
+    For slight modification of the default repertoire the |g:AutoClosePairs_add|
+and |g:AutoClosePairs_del| provide a simplified interface. Note These variables
+only take effect if |g:AutoClosePairs| isn't set.
+
+                                                      *g:AutoClosePairs_add*
+
+    |g:AutoClosePairs_add| has the same format as |g:AutoClosePairs| (see
+above). Example:
+>
+      " add <angular brackets> and |pipes|
+      let g:AutoClosePairs_add = "<> |"
+<
+                                                      *g:AutoClosePairs_del*
+
+    |g:AutoClosePairs_del| should contain a string of opener characters to be
+removed from default repertoire:
+>
+      " don't close apostrophes
+      let g:AutoClosePairs_del = "'"
+<
+
+3.2 Configuration helper functions~
+
+Note The following functions aren't defined when the user's .vimrc is being
+sources, because at that point plugin wasn't loaded yet. They can be used in
+autocommands which run after loading the plugins (e.g. FileType)
 
                                                      *AutoClose#ParsePairs()*
 
@@ -151,17 +184,18 @@ these variables easier. The function expects a string of space separated
 character pairs or single characters. Single characters are treated as twin
 pairs (where opening and closing symbols are identical). Examples:
 >
-      " override the global default
-      let g:AutoClosePairs = AutoClose#ParsePairs("() [] {} <> «» ` \" '")
-
       " override the defaults for a particular FileType
       autocommand FileType lisp
               \ let b:AutoClosePairs = AutoClose#ParsePairs("\" ()")
 <
     The default pair repertoire is equivalent to the call:
 >
-      AutoClose#ParsePairs("() [] {} <> «» ` \" '")a
+      AutoClose#ParsePairs("() [] {} ` \" '")
 <
+    Note Most of the time you don't need to use this function, as variables
+|b:AutoClosePairs| and |g:AutoClosePairs| are automatically parsed if they
+contain strings instead of dictionaries.
+
                                                   *AutoClose#DefaultPairs()*
 
     A copy of the default pair repertoire can be retrieved using the function
@@ -189,16 +223,10 @@ the default pairs dictionary.
       " auto-close || pair in ruby files
       autocmd FileType ruby
               \ let b:AutoClosePairs = AutoClose#DefaultPairsModified("|", "")
-
-      " don't auto-close <> pair in shell files
-      autocmd FileType typoscript,zsh,sh
-              \ let b:AutoClosePairs = AutoClose#DefaultPairsModified("", "<")
 <
 
-    Note the above two autocommands are actually installed by the plugin.
-
                                       *ac_protectedregions* *acProtectedRegions*
-3.2 Defining protected regions~
+3.3 Defining protected regions~
 
     Auto-close behavior is disabled in certain syntax regions: "Comment",
 "String" and "Character". This feature is controlled by the setting
@@ -213,7 +241,7 @@ Both variables should be assigned a list of region names. Example:
 <
 
                                           *ac_turnon* *ac_turnoff* *ac_toggle*
-3.3 Turning AutoClose on and off~
+3.4 Turning AutoClose on and off~
 
     As AutoClose change the buffer you are editing, sometimes you just want
 to turn this feature off for a while and than turn it on again.
@@ -229,7 +257,7 @@ want to do that task:
 
                                   *ac_wrapPrefix* *AutoCloseSelectionWrapPrefix*
 
-3.4 Selection wrap prefix~
+3.5 Selection wrap prefix~
 
     As described above (see |ac_wrapSelection|), when in visual mode, key
 combination <Leader>a followed by a configured open or close symbol causes the
