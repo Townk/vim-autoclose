@@ -469,8 +469,8 @@ if !exists("g:AutoClosePairs_del") | let g:AutoClosePairs_del = "" | endif
 if !exists("g:AutoClosePairs")
     let g:AutoClosePairs = s:ModifyPairsList(
                 \ s:AutoClosePairs_FactoryDefaults,
-                \ g:AutoCloseDefaultPairs_add,
-                \ g:AutoCloseDefaultPairs_del )
+                \ g:AutoClosePairs_add,
+                \ g:AutoClosePairs_del )
 endif
 
 let s:movementKeys = split('Esc Up Down Left Right Home End PageUp PageDown')
