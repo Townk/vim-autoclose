@@ -17,11 +17,24 @@ let g:loaded_AutoClose = 1
 let s:global_cpo = &cpo " store compatible-mode in local variable
 set cpo&vim             " go into nocompatible-mode
 
-" Determine if special handling is required for xterm/screen/vt100
-" movement keys.
-let s:needspecialkeyhandling = &term[:4] == "xterm"
-      \ || &term[:5] == "screen" || &term[:4] == "linux"
-      \ || &term[:3] == "rxvt" || &term[:4] == "urxvt"
+if !exists('g:AutoClosePreserveDotReg')
+    let g:AutoClosePreserveDotReg = 1
+endif
+
+if g:AutoClosePreserveDotReg
+    " Because dot register preservation code remaps escape we have to remap
+    " some terminal specific escape sequences first
+    if &term =~ 'xterm' || &term =~ 'rxvt' || &term =~ 'screen' || &term =~ 'linux'
+        imap <silent> <Esc>OA <Up>
+        imap <silent> <Esc>OB <Down>
+        imap <silent> <Esc>OC <Right>
+        imap <silent> <Esc>OD <Left>
+        imap <silent> <Esc>OH <Home>
+        imap <silent> <Esc>OF <End>
+        imap <silent> <Esc>[5~ <PageUp>
+        imap <silent> <Esc>[6~ <PageDown>
+    endif
+endif
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Functions
@@ -339,8 +352,8 @@ function! s:DefineVariables()
                 \ 'AutoCloseProtectedRegions': ["Comment", "String", "Character"],
                 \ 'AutoCloseSmartQuote': 1,
                 \ 'AutoCloseOn': 1,
-                \ 'AutoClosePreservDotReg': 1,
                 \ 'AutoCloseSelectionWrapPrefix': '<LEADER>a',
+                \ 'AutoClosePumvisible': {},
                 \ }
 
     " Let the user define if he/she wants the plugin to do special actions when the
@@ -348,10 +361,10 @@ function! s:DefineVariables()
     " Movement keys used in the menu get mapped to themselves
     " (Up/Down/PageUp/PageDown).
     for key in s:movementKeys
-        let defaults['AutoClosePumvisible'.key] = ''
+        let defaults['AutoClosePumvisible'][key] = ''
     endfor
     for key in s:pumMovementKeys
-        let defaults['AutoClosePumvisible'.key] = '<'.key.'>'
+        let defaults['AutoClosePumvisible'][key] = '<'.key.'>'
     endfor
 
     if exists ('b:AutoClosePairs') && type('b:AutoClosePairs') == type("")
@@ -401,17 +414,17 @@ function! s:CreateExtraMaps()
     inoremap <buffer> <silent> <BS>         <C-R>=<SID>Backspace()<CR>
     inoremap <buffer> <silent> <Del>        <C-R>=<SID>Delete()<CR>
 
-    if b:AutoClosePreservDotReg == 1
+    if g:AutoClosePreserveDotReg
         " Fix the re-do feature by flushing the char buffer on key movements (including Escape):
         for key in s:movementKeys
-            if s:needspecialkeyhandling
-                exec 'imap <buffer> <silent>' . s:movementKeysXterm[key] . ' <'.key.'>'
-            endif
-            exe 'let l:pvisiblemap = b:AutoClosePumvisible' . key
+            let l:pvisiblemap = b:AutoClosePumvisible[key]
+            let key = "<".key.">"
+            let l:currentmap = maparg(key,"i")
+            if (l:currentmap=="")|let l:currentmap=key|endif
             if len(l:pvisiblemap)
-              exec "inoremap <buffer> <silent> <expr>  <" . key . ">  pumvisible() ? '" . l:pvisiblemap . "' : '<C-R>=<SID>FlushBuffer()<CR><" . key . ">'"
+              exec "inoremap <buffer> <silent> <expr> " . key . " pumvisible() ? '" . l:pvisiblemap . "' : '<C-R>=<SID>FlushBuffer()<CR>" . l:currentmap . "'"
             else
-              exec "inoremap <buffer> <silent> <" . key . ">  <C-R>=<SID>FlushBuffer()<CR><" . key . ">"
+              exec "inoremap <buffer> <silent> " . key . "  <C-R>=<SID>FlushBuffer()<CR>" . l:currentmap
             endif
         endfor
 
@@ -463,9 +476,11 @@ endif
 let s:movementKeys = split('Esc Up Down Left Right Home End PageUp PageDown')
 " list of keys that get mapped to themselves for pumvisible()
 let s:pumMovementKeys = split('Up Down PageUp PageDown')
-if s:needspecialkeyhandling
-  " map s:movementKeys to xterm equivalent
-  let s:movementKeysXterm = {'Esc': '<C-[>', 'Up': '<C-[>OA', 'Down': '<C-[>OB', 'Left': '<C-[>OD', 'Right': '<C-[>OC', 'Home': '<C-[>OH', 'End': '<C-[>OF', 'PageUp': '<C-[>[5~', 'PageDown': '<C-[>[6~'}
+
+
+if has("gui_macvim")
+    call extend(s:movementKeys,
+                \ split("D-Left D-Right D-Up D-Down M-Left M-Right M-Up M-Down"))
 endif
 
 augroup <Plug>(autoclose)
