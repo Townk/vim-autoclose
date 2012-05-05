@@ -24,7 +24,7 @@ endif
 if g:AutoClosePreserveDotReg
     " Because dot register preservation code remaps escape we have to remap
     " some terminal specific escape sequences first
-    if &term =~ 'xterm' || &term =~ 'rxvt' || &term =~ 'screen' || &term =~ 'linux'
+    if &term =~ 'xterm' || &term =~ 'rxvt' || &term =~ 'screen' || &term =~ 'linux' || &term =~ 'gnome'
         imap <silent> <Esc>OA <Up>
         imap <silent> <Esc>OB <Down>
         imap <silent> <Esc>OC <Right>
