@@ -297,11 +297,13 @@ function! s:Space()
 endfunction
 
 function! s:Enter()
-    if b:AutoCloseOn && s:IsEmptyPair() && stridx( b:AutoCloseExpandEnterOn, s:GetPrevChar() ) >= 0
+    if has_key(b:AutoClosePumvisible, 'ENTER') && pumvisible()
+        let b:snippet_chosen = 1
+        return b:AutoClosePumvisible['ENTER']
+    elseif b:AutoCloseOn && s:IsEmptyPair() && stridx( b:AutoCloseExpandEnterOn, s:GetPrevChar() ) >= 0
         return "\<CR>\<Esc>O"
-    else
-        return "\<CR>"
     endif
+    return "\<CR>"
 endfunction
 
 function! s:ToggleAutoClose()
@@ -368,8 +370,8 @@ function! s:DefineVariables()
                 \ 'AutoCloseOn': 1,
                 \ 'AutoCloseSelectionWrapPrefix': '<LEADER>a',
                 \ 'AutoClosePumvisible': {},
-                \ 'AutoCloseExpandSpace': 1,
                 \ 'AutoCloseExpandEnterOn': "{",
+                \ 'AutoCloseExpandSpace': 1,
                 \ }
 
     " Let the user define if he/she wants the plugin to do special actions when the
@@ -391,12 +393,27 @@ function! s:DefineVariables()
 
     " Now handle/assign values
     for key in keys(defaults)
-        if exists('b:'.key) && type(eval('b:'.key)) == type(defaults[key])
-            continue
-        elseif exists('g:'.key) && type(eval('g:'.key)) == type(defaults[key])
-            exec 'let b:' . key . ' = g:' . key
+        if key == 'AutoClosePumvisible'
+            let tempVisible = defaults['AutoClosePumvisible']
+            if exists('g:AutoClosePumvisible') && type(eval('g:AutoClosePumvisible')) == type(defaults['AutoClosePumvisible'])
+                for childKey in keys(g:AutoClosePumvisible)
+                    let tempVisible[toupper(childKey)] = g:AutoClosePumvisible[childKey]
+                endfor
+            endif
+            if exists('b:AutoClosePumvisible') && type(eval('b:AutoClosePumvisible')) == type(defaults['AutoClosePumvisible'])
+                for childKey in keys(b:AutoClosePumvisible)
+                    let tempVisible[toupper(childKey)] = b:AutoClosePumvisible[childKey]
+                endfor
+            endif
+            let b:AutoClosePumvisible = tempVisible
         else
-            exec 'let b:' . key . ' = ' . string(defaults[key])
+            if exists('b:'.key) && type(eval('b:'.key)) == type(defaults[key])
+                continue
+            elseif exists('g:'.key) && type(eval('g:'.key)) == type(defaults[key])
+                exec 'let b:' . key . ' = g:' . key
+            else
+                exec 'let b:' . key . ' = ' . string(defaults[key])
+            endif
         endif
     endfor
 endfunction
@@ -444,9 +461,9 @@ function! s:CreateExtraMaps()
             let l:currentmap = maparg(key,"i")
             if (l:currentmap=="")|let l:currentmap=key|endif
             if len(l:pvisiblemap)
-              exec "inoremap <buffer> <silent> <expr> " . key . " pumvisible() ? '" . l:pvisiblemap . "' : '<C-R>=<SID>FlushBuffer()<CR>" . l:currentmap . "'"
+                exec "inoremap <buffer> <silent> <expr> " . key . " pumvisible() ? '" . l:pvisiblemap . "' : '<C-R>=<SID>FlushBuffer()<CR>" . l:currentmap . "'"
             else
-              exec "inoremap <buffer> <silent> " . key . "  <C-R>=<SID>FlushBuffer()<CR>" . l:currentmap
+                exec "inoremap <buffer> <silent> " . key . "  <C-R>=<SID>FlushBuffer()<CR>" . l:currentmap
             endif
         endfor
 
@@ -481,10 +498,10 @@ function! s:quoteAndEscape(char)
     return '"' . get(s:escapedChars,a:char,a:char) . '"'
 endfunction
 
+
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Configuration
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-
 let s:AutoClosePairs_FactoryDefaults = AutoClose#ParsePairs("() {} [] ` \" '")
 if !exists("g:AutoClosePairs_add") | let g:AutoClosePairs_add = "" | endif
 if !exists("g:AutoClosePairs_del") | let g:AutoClosePairs_del = "" | endif
@@ -495,18 +512,17 @@ if !exists("g:AutoClosePairs")
                 \ g:AutoClosePairs_del )
 endif
 
-let s:movementKeys = split('Esc Up Down Left Right Home End PageUp PageDown')
+let s:movementKeys = split('ESC UP DOWN LEFT RIGHT HOME END PAGEUP PAGEDOWN')
 " list of keys that get mapped to themselves for pumvisible()
-let s:pumMovementKeys = split('Up Down PageUp PageDown')
+let s:pumMovementKeys = split('UP DOWN PAGEUP PAGEDOWN')
 
 
 if has("gui_macvim")
-    call extend(s:movementKeys,
-                \ split("D-Left D-Right D-Up D-Down M-Left M-Right M-Up M-Down"))
+    call extend(s:movementKeys, split("D-LEFT D-RIGHT D-UP D-DOWN M-LEFT M-RIGHT M-UP M-DOWN"))
 endif
 
 augroup <Plug>(autoclose)
-au!
+autocmd!
 autocmd BufNewFile,BufRead,BufEnter * if !<SID>IsLoadedOnBuffer() | call <SID>CreateMaps() | endif
 autocmd InsertEnter * call <SID>EmptyBuffer()
 autocmd BufEnter * if mode() == 'i' | call <SID>EmptyBuffer() | endif
