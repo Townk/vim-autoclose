@@ -369,7 +369,7 @@ function! s:DefineVariables()
                 \ 'AutoCloseSmartQuote': 1,
                 \ 'AutoCloseOn': 1,
                 \ 'AutoCloseSelectionWrapPrefix': '<LEADER>a',
-                \ 'AutoClosePumvisible': {},
+                \ 'AutoClosePumvisible': {"ENTER": "\<C-Y>", "ESC": "\<C-E>"},
                 \ 'AutoCloseExpandEnterOn': "{",
                 \ 'AutoCloseExpandSpace': 1,
                 \ }
@@ -379,9 +379,15 @@ function! s:DefineVariables()
     " Movement keys used in the menu get mapped to themselves
     " (Up/Down/PageUp/PageDown).
     for key in s:movementKeys
+        if key == 'ENTER' || key == 'ESC'
+            continue
+        endif
         let defaults['AutoClosePumvisible'][key] = ''
     endfor
     for key in s:pumMovementKeys
+        if key == 'ENTER' || key == 'ESC'
+            continue
+        endif
         let defaults['AutoClosePumvisible'][key] = '<'.key.'>'
     endfor
 
