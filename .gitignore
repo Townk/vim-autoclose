@@ -1,4 +1,3 @@
 # File types to be ignored by our git repositories
 
-.DS_Store
-
+doc/tags
